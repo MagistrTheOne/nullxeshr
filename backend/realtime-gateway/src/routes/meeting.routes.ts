@@ -1,6 +1,7 @@
 import express, { type Request, type Response } from "express";
 import { z } from "zod";
 import { HttpError } from "../middleware/errorHandler";
+import { logger } from "../logging/logger";
 import { MeetingOrchestrator } from "../services/meetingOrchestrator";
 import type { FailMeetingInput, StartMeetingInput, StopMeetingInput } from "../types/meeting";
 
@@ -44,6 +45,25 @@ export function createMeetingRouter(orchestrator: MeetingOrchestrator): express.
 
   router.post("/start", asyncHandler(async (req: Request, res: Response) => {
     const input = parseBody<StartMeetingInput>(startMeetingSchema, req.body);
+    const metadata = (input.metadata ?? {}) as Record<string, unknown>;
+    const interviewContext = (metadata.interviewContext ?? {}) as Record<string, unknown>;
+    const contextProbe = {
+      hasJobTitle: typeof interviewContext.jobTitle === "string" && interviewContext.jobTitle.trim().length > 0,
+      hasVacancyText: typeof interviewContext.vacancyText === "string" && interviewContext.vacancyText.trim().length > 0,
+      hasCompanyName: typeof interviewContext.companyName === "string" && interviewContext.companyName.trim().length > 0,
+      questionCount: Array.isArray(interviewContext.questions) ? interviewContext.questions.length : 0
+    };
+
+    logger.info(
+      {
+        requestId: req.requestId,
+        internalMeetingId: input.internalMeetingId,
+        triggerSource: input.triggerSource,
+        contextProbe
+      },
+      "meeting start received with interview context probe"
+    );
+
     const result = orchestrator.startMeeting(input);
     res.status(201).json(result);
   }));

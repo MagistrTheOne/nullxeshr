@@ -44,6 +44,7 @@ export function MeetingHeader({
   failDisabled = true
 }: MeetingHeaderProps) {
   const [entryUrlInput, setEntryUrlInput] = useState(prototypeEntryUrl ?? "");
+  const missingRuntimeIdLabel = jobAiId ? "будет после Start Session" : "—";
 
   useEffect(() => {
     setEntryUrlInput(prototypeEntryUrl ?? "");
@@ -116,9 +117,9 @@ export function MeetingHeader({
           <div className="grid grid-cols-1 gap-x-10 gap-y-2 text-slate-500 sm:grid-cols-2">
             <p>Компания: {companyName ?? "—"}</p>
             <p>JobAI ID: {jobAiId ?? "—"}</p>
-            <p>Nullxes ID: {meetingId ?? "—"}</p>
+            <p>Nullxes ID: {meetingId ?? missingRuntimeIdLabel}</p>
             <p>Дата проведения: {meetingAt ? new Date(meetingAt).toLocaleString("ru-RU") : "—"}</p>
-            <p className="sm:col-span-2">Session ID: {sessionId ?? "—"}</p>
+            <p className="sm:col-span-2">Session ID: {sessionId ?? missingRuntimeIdLabel}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2 border-t border-slate-300/40 pt-4">
             <Badge className="shrink-0 bg-[#8aa0bb] text-white">{statusLabel}</Badge>

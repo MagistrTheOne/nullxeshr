@@ -1,11 +1,10 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CallingState,
   DeviceSettings,
   PaginatedGridLayout,
-  SpeakerLayout,
   StreamCall,
   StreamTheme,
   StreamVideo,
@@ -29,7 +28,7 @@ type StreamTokenResponse = {
   callType: string;
 };
 
-function CandidateCallBody({ layout }: { layout: "speaker" | "grid" }) {
+function CandidateCallBody() {
   const { useCallCallingState } = useCallStateHooks();
   const state = useCallCallingState();
 
@@ -37,7 +36,8 @@ function CandidateCallBody({ layout }: { layout: "speaker" | "grid" }) {
     return <div className="flex h-full items-center justify-center text-sm text-slate-500">Stream is not connected</div>;
   }
 
-  return layout === "speaker" ? <SpeakerLayout /> : <PaginatedGridLayout />;
+  // Use a single stable layout to avoid a duplicated thumbnail strip in the card.
+  return <PaginatedGridLayout />;
 }
 
 type CandidateStreamCardProps = {
@@ -54,6 +54,10 @@ type CandidateStreamCardProps = {
     interviewContext?: InterviewStartContext;
   }) => Promise<InterviewStartResult>;
   interviewContext?: InterviewStartContext;
+  onSharedCallChange?: (state: {
+    client: StreamVideoClient | null;
+    call: ReturnType<StreamVideoClient["call"]> | null;
+  }) => void;
 };
 
 export function CandidateStreamCard({
@@ -63,11 +67,11 @@ export function CandidateStreamCard({
   interviewId,
   meetingAt,
   onEnsureInterviewStart,
-  interviewContext
+  interviewContext,
+  onSharedCallChange
 }: CandidateStreamCardProps) {
   const [client, setClient] = useState<StreamVideoClient | null>(null);
   const [call, setCall] = useState<ReturnType<StreamVideoClient["call"]> | null>(null);
-  const [layout, setLayout] = useState<"speaker" | "grid">("speaker");
   const [showDevices, setShowDevices] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,6 +81,10 @@ export function CandidateStreamCard({
   const streamViewportRef = useRef<HTMLDivElement | null>(null);
 
   const callRoomId = useMemo(() => meetingId ?? "demo-call", [meetingId]);
+
+  useEffect(() => {
+    onSharedCallChange?.({ client, call });
+  }, [call, client, onSharedCallChange]);
 
   const startStream = async () => {
     setBusy(true);
@@ -264,12 +272,6 @@ export function CandidateStreamCard({
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant={layout === "speaker" ? "default" : "secondary"} onClick={() => setLayout("speaker")}>
-              Speaker
-            </Button>
-            <Button size="sm" variant={layout === "grid" ? "default" : "secondary"} onClick={() => setLayout("grid")}>
-              Grid
-            </Button>
             {!call ? (
               <Button size="sm" onClick={startStream} disabled={busy}>
                 Join Stream
@@ -300,7 +302,7 @@ export function CandidateStreamCard({
           <StreamVideo client={client}>
             <StreamTheme>
               <StreamCall call={call}>
-                <CandidateCallBody layout={layout} />
+                <CandidateCallBody />
               </StreamCall>
             </StreamTheme>
           </StreamVideo>

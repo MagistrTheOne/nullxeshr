@@ -237,6 +237,15 @@ export function createRealtimeRouter(deps: RealtimeRouterDeps): express.Router {
     });
   }));
 
+  router.get("/session/:sessionId", (req: Request, res: Response) => {
+    const sessionId = req.params.sessionId;
+    const session = deps.sessionStore.getSession(sessionId);
+    if (!session) {
+      throw new HttpError(404, "Session not found");
+    }
+    res.status(200).json({ session });
+  });
+
   router.delete("/session/:sessionId", (req: Request, res: Response) => {
     const sessionId = req.params.sessionId;
     const session = deps.sessionStore.getSession(sessionId);

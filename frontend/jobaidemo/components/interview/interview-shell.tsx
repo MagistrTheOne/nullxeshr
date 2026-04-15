@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import type { StreamVideoClient } from "@stream-io/video-react-sdk";
 import { useInterviewSession, type InterviewStartContext } from "@/hooks/use-interview-session";
 import {
   getInterviewById,
@@ -39,7 +40,7 @@ export function InterviewShell() {
     const id = Number(raw);
     return Number.isInteger(id) && id > 0 ? id : null;
   }, [searchParams]);
-  const { start, stop, markFailed, meetingId, sessionId, statusLabel, phase, error, remoteAudioStream } =
+  const { start, stop, markFailed, meetingId, sessionId, avatarReady, statusLabel, phase, error, remoteAudioStream } =
     useInterviewSession();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [origin, setOrigin] = useState("");
@@ -58,6 +59,22 @@ export function InterviewShell() {
   const userEditedFio = useRef(false);
   const hydratedServerFioFor = useRef<number | null>(null);
   const [fioSyncError, setFioSyncError] = useState<string | null>(null);
+  const [sharedStreamClient, setSharedStreamClient] = useState<StreamVideoClient | null>(null);
+  const [sharedStreamCall, setSharedStreamCall] = useState<ReturnType<StreamVideoClient["call"]> | null>(null);
+
+  const handleSharedCallChange = useCallback(
+    ({
+      client,
+      call
+    }: {
+      client: StreamVideoClient | null;
+      call: ReturnType<StreamVideoClient["call"]> | null;
+    }) => {
+      setSharedStreamClient(client);
+      setSharedStreamCall(call);
+    },
+    []
+  );
 
   candidateFioRef.current = candidateFio;
 
@@ -286,8 +303,8 @@ export function InterviewShell() {
       <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-10">
         <MeetingHeader
           statusLabel={statusLabel}
-          meetingId={meetingId}
-          sessionId={sessionId}
+          meetingId={meetingId ?? selectedRow?.nullxesMeetingId ?? selectedInterviewDetail?.projection.nullxesMeetingId ?? null}
+          sessionId={sessionId ?? selectedRow?.sessionId ?? selectedInterviewDetail?.projection.sessionId ?? null}
           jobAiId={selectedRow?.jobAiId}
           companyName={selectedRow?.companyName}
           meetingAt={selectedRow?.meetingAt}
@@ -301,13 +318,49 @@ export function InterviewShell() {
           }}
           onCandidateFioBlur={flushFioSave}
           onStart={() => {
-            void start({
-              triggerSource: "manual_debug_button",
-              interviewId: selectedRow?.jobAiId,
-              meetingAt: selectedRow?.meetingAt,
-              bypassMeetingAtGuard: true,
-              interviewContext: interviewStartContext
-            });
+            void (async () => {
+              let contextForStart = interviewStartContext;
+              const activeInterviewId = selectedRow?.jobAiId;
+              if (
+                activeInterviewId &&
+                (!contextForStart?.jobTitle || !contextForStart?.companyName || (contextForStart.questions?.length ?? 0) === 0)
+              ) {
+                try {
+                  const syncedDetail = await getInterviewById(activeInterviewId, true);
+                  setSelectedInterviewDetail(syncedDetail);
+                  contextForStart = {
+                    candidateFirstName: candidateFio.trim() || syncedDetail.interview.candidateFirstName,
+                    candidateLastName: syncedDetail.interview.candidateLastName,
+                    candidateFullName:
+                      candidateFio.trim() ||
+                      [syncedDetail.interview.candidateFirstName, syncedDetail.interview.candidateLastName]
+                        .filter(Boolean)
+                        .join(" ")
+                        .trim(),
+                    jobTitle: syncedDetail.interview.jobTitle,
+                    vacancyText: syncedDetail.interview.vacancyText,
+                    companyName: syncedDetail.interview.companyName,
+                    greetingSpeech:
+                      (syncedDetail.interview.greetingSpeechResolved as string | undefined) ??
+                      syncedDetail.interview.greetingSpeech,
+                    finalSpeech:
+                      (syncedDetail.interview.finalSpeechResolved as string | undefined) ??
+                      syncedDetail.interview.finalSpeech,
+                    questions: syncedDetail.interview.specialty?.questions
+                  };
+                } catch {
+                  // Keep best-effort context if force-sync fails.
+                }
+              }
+
+              await start({
+                triggerSource: "manual_debug_button",
+                interviewId: activeInterviewId,
+                meetingAt: selectedRow?.meetingAt,
+                bypassMeetingAtGuard: true,
+                interviewContext: contextForStart
+              });
+            })();
           }}
           onStop={() => {
             void stop({ interviewId: selectedRow?.jobAiId });
@@ -346,8 +399,15 @@ export function InterviewShell() {
             meetingAt={selectedRow?.meetingAt}
             interviewContext={interviewStartContext}
             onEnsureInterviewStart={start}
+            onSharedCallChange={handleSharedCallChange}
           />
-          <AvatarStreamCard meetingId={meetingId} sessionId={sessionId} participantName="HR Avatar" />
+          <AvatarStreamCard
+            participantName="HR Avatar"
+            enabled={phase === "connected"}
+            avatarReady={avatarReady}
+            sharedClient={sharedStreamClient}
+            sharedCall={sharedStreamCall}
+          />
           <ParticipantCard roleLabel="Наблюдатель" participantName="Наблюдатель" placeholder />
         </main>
         <section className="grid gap-6 lg:grid-cols-3">

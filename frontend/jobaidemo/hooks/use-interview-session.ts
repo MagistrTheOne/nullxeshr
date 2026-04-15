@@ -1,8 +1,11 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  closeRealtimeSession,
   failMeeting,
+  getRealtimeSessionState,
+  getInterviewById,
   linkInterviewSession,
   startMeeting,
   stopMeeting,
@@ -37,11 +40,68 @@ type StartOptions = {
   interviewContext?: InterviewStartContext;
 };
 
+const AVATAR_READY_EVENT_TYPES = [
+  "avatar_ready",
+  "avatar.ready",
+  "agent.avatar.ready",
+  "avatar.stream.joined"
+];
+
+function isIgnorableStatusTransitionError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("interviews.status_change_not_allowed") || message.includes("status_change_failed");
+}
+
+async function transitionJobAiToInMeeting(interviewId: number): Promise<void> {
+  const detail = await getInterviewById(interviewId).catch(() => null);
+  const currentStatus = (detail?.projection.jobAiStatus ?? detail?.interview.status) as JobAiInterviewStatus | undefined;
+
+  if (!currentStatus) {
+    return;
+  }
+  if (currentStatus === "in_meeting") {
+    return;
+  }
+  if (currentStatus === "pending") {
+    await updateInterviewStatus(interviewId, "received");
+    await updateInterviewStatus(interviewId, "in_meeting");
+    return;
+  }
+  if (currentStatus === "received") {
+    await updateInterviewStatus(interviewId, "in_meeting");
+  }
+}
+
+async function transitionJobAiToCompleted(interviewId: number): Promise<void> {
+  const detail = await getInterviewById(interviewId).catch(() => null);
+  const currentStatus = (detail?.projection.jobAiStatus ?? detail?.interview.status) as JobAiInterviewStatus | undefined;
+
+  if (!currentStatus || currentStatus === "completed") {
+    return;
+  }
+
+  if (currentStatus === "pending") {
+    await updateInterviewStatus(interviewId, "received");
+    await updateInterviewStatus(interviewId, "in_meeting");
+    await updateInterviewStatus(interviewId, "completed");
+    return;
+  }
+  if (currentStatus === "received") {
+    await updateInterviewStatus(interviewId, "in_meeting");
+    await updateInterviewStatus(interviewId, "completed");
+    return;
+  }
+  if (currentStatus === "in_meeting") {
+    await updateInterviewStatus(interviewId, "completed");
+  }
+}
+
 export function useInterviewSession() {
   const [phase, setPhase] = useState<InterviewPhase>("idle");
   const [meetingId, setMeetingId] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [avatarReady, setAvatarReady] = useState(false);
   const [rtcState, setRtcState] = useState<WebRtcConnectionState>("idle");
   const [remoteAudioStream, setRemoteAudioStream] = useState<MediaStream | null>(null);
 
@@ -56,6 +116,40 @@ export function useInterviewSession() {
     }
     return rtcRef.current;
   }, []);
+
+  useEffect(() => {
+    if (!sessionId || phase !== "connected") {
+      setAvatarReady(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const checkAvatarReady = async () => {
+      try {
+        const state = await getRealtimeSessionState(sessionId);
+        const counts = state.session.eventTypeCounts ?? {};
+        const isReady = AVATAR_READY_EVENT_TYPES.some((type) => (counts[type] ?? 0) > 0);
+        if (!cancelled) {
+          setAvatarReady(isReady);
+        }
+      } catch {
+        if (!cancelled) {
+          setAvatarReady(false);
+        }
+      }
+    };
+
+    void checkAvatarReady();
+    const timer = setInterval(() => {
+      void checkAvatarReady();
+    }, 2000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [phase, sessionId]);
 
   const start = useCallback(async (options?: StartOptions): Promise<InterviewStartResult> => {
     if (phase === "connected" && meetingId && sessionId) {
@@ -85,7 +179,14 @@ export function useInterviewSession() {
         metadata: {
           source: "jobaidemo",
           jobAiInterviewId: options?.interviewId,
-          interviewContext: options?.interviewContext
+          interviewContext: options?.interviewContext,
+          interviewContextMeta: {
+            contextVersion: "INTERVIEW_UI_CONTRACT_v1",
+            hasJobTitle: Boolean(options?.interviewContext?.jobTitle),
+            hasVacancyText: Boolean(options?.interviewContext?.vacancyText),
+            hasCompanyName: Boolean(options?.interviewContext?.companyName),
+            questionCount: options?.interviewContext?.questions?.length ?? 0
+          }
         }
       });
       setMeetingId(internalMeetingId);
@@ -102,9 +203,13 @@ export function useInterviewSession() {
             sessionId: connected.sessionId,
             nullxesStatus: "in_meeting"
           });
-          await updateInterviewStatus(options.interviewId, "in_meeting" satisfies JobAiInterviewStatus);
+          await transitionJobAiToInMeeting(options.interviewId);
         } catch (statusError) {
-          setError(statusError instanceof Error ? statusError.message : "Failed to update JobAI status");
+          if (isIgnorableStatusTransitionError(statusError)) {
+            console.warn("Skipping non-critical JobAI status transition error", statusError);
+          } else {
+            setError(statusError instanceof Error ? statusError.message : "Failed to update JobAI status");
+          }
         }
       }
 
@@ -144,6 +249,8 @@ export function useInterviewSession() {
 
     setPhase("stopping");
     try {
+      const activeMeetingId = meetingId;
+      const activeSessionId = sessionId;
       const rtc = ensureClient();
       await rtc.postEvent({
         type: "session.update",
@@ -151,19 +258,32 @@ export function useInterviewSession() {
         message: "session_stopping"
       });
 
-      await stopMeeting(meetingId, {
+      await stopMeeting(activeMeetingId, {
         reason: "manual_stop",
         finalStatus: "completed"
       });
 
       if (options?.interviewId) {
         try {
-          await updateInterviewStatus(options.interviewId, "completed" satisfies JobAiInterviewStatus);
+          await transitionJobAiToCompleted(options.interviewId);
+          await linkInterviewSession({
+            interviewId: options.interviewId,
+            meetingId: activeMeetingId,
+            sessionId: activeSessionId ?? undefined,
+            nullxesStatus: "completed"
+          });
         } catch (statusError) {
-          setError(statusError instanceof Error ? statusError.message : "Failed to update JobAI status");
+          if (isIgnorableStatusTransitionError(statusError)) {
+            console.warn("Skipping non-critical JobAI status transition error", statusError);
+          } else {
+            setError(statusError instanceof Error ? statusError.message : "Failed to update JobAI status");
+          }
         }
       }
       rtc.close();
+      if (activeSessionId) {
+        await closeRealtimeSession(activeSessionId).catch(() => undefined);
+      }
       setMeetingId(null);
       setSessionId(null);
       setPhase("idle");
@@ -171,7 +291,7 @@ export function useInterviewSession() {
       setPhase("failed");
       setError(err instanceof Error ? err.message : "Failed to stop session");
     }
-  }, [ensureClient, meetingId]);
+  }, [ensureClient, meetingId, sessionId]);
 
   const markFailed = useCallback(async () => {
     if (!meetingId) {
@@ -197,6 +317,7 @@ export function useInterviewSession() {
     statusLabel,
     meetingId,
     sessionId,
+    avatarReady,
     rtcState,
     error,
     remoteAudioStream,

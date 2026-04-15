@@ -5,6 +5,21 @@ export type SessionTokenResponse = {
   session: Record<string, unknown>;
 };
 
+export type RealtimeSessionState = {
+  session: {
+    id: string;
+    status: "starting" | "active" | "closing" | "closed" | "error";
+    createdAt: number;
+    updatedAt: number;
+    lastActivityAt: number;
+    closedAt?: number;
+    remoteCallId?: string;
+    lastError?: string;
+    eventCount: number;
+    eventTypeCounts: Record<string, number>;
+  };
+};
+
 export type StartMeetingInput = {
   internalMeetingId: string;
   triggerSource: string;
@@ -170,6 +185,17 @@ export async function sendRealtimeEvent(
   return requestJson<{ status: string; eventType?: string }>(`realtime/session/${sessionId}/events`, {
     method: "POST",
     body: JSON.stringify(payload)
+  });
+}
+
+export async function getRealtimeSessionState(sessionId: string): Promise<RealtimeSessionState> {
+  return requestJson<RealtimeSessionState>(`realtime/session/${sessionId}`, { method: "GET" });
+}
+
+export async function closeRealtimeSession(sessionId: string): Promise<void> {
+  await fetch(`/api/gateway/realtime/session/${sessionId}`, {
+    method: "DELETE",
+    credentials: "include"
   });
 }
 
