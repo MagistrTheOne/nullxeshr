@@ -57,6 +57,7 @@ const AVATAR_READY_EVENT_TYPES = [
   "agent.avatar.ready",
   "avatar.stream.joined"
 ];
+const HARD_CONTEXT_GUARD_ENABLED = process.env.NEXT_PUBLIC_INTERVIEW_HARD_GUARD === "1";
 
 function isIgnorableStatusTransitionError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -193,6 +194,7 @@ export function useInterviewSession() {
   const [lastAgentContextTrace, setLastAgentContextTrace] = useState<AgentContextTrace | null>(null);
   const [rtcState, setRtcState] = useState<WebRtcConnectionState>("idle");
   const [remoteAudioStream, setRemoteAudioStream] = useState<MediaStream | null>(null);
+  const [agentInputEnabled, setAgentInputEnabled] = useState(true);
 
   const rtcRef = useRef<WebRtcInterviewClient | null>(null);
 
@@ -205,6 +207,30 @@ export function useInterviewSession() {
     }
     return rtcRef.current;
   }, []);
+
+  const setObserverTalkIsolation = useCallback(
+    async (observerTalkActive: boolean) => {
+      const rtc = ensureClient();
+      const nextAgentInputEnabled = !observerTalkActive;
+      rtc.setAudioInputEnabled(nextAgentInputEnabled);
+      setAgentInputEnabled(nextAgentInputEnabled);
+
+      const activeSessionId = rtc.getSessionId();
+      if (!activeSessionId) {
+        return;
+      }
+      try {
+        await rtc.postEvent({
+          type: "observer.agent_isolation.enforced",
+          observerTalkActive,
+          agentInputEnabled: nextAgentInputEnabled
+        });
+      } catch {
+        // Ignore telemetry delivery errors; isolation is enforced locally.
+      }
+    },
+    [ensureClient]
+  );
 
   useEffect(() => {
     if (!sessionId || phase !== "connected") {
@@ -260,11 +286,12 @@ export function useInterviewSession() {
 
     const requiredContext = evaluateRequiredContext(options?.interviewContext);
     if (
-      !requiredContext.candidateReady ||
-      !requiredContext.companyReady ||
-      !requiredContext.jobTitleReady ||
-      !requiredContext.vacancyTextReady ||
-      !requiredContext.questionsReady
+      HARD_CONTEXT_GUARD_ENABLED &&
+      (!requiredContext.candidateReady ||
+        !requiredContext.companyReady ||
+        !requiredContext.jobTitleReady ||
+        !requiredContext.vacancyTextReady ||
+        !requiredContext.questionsReady)
     ) {
       throw new Error(
         "Start Session blocked: interview context is incomplete (candidate, company, job title, vacancy text, questions)."
@@ -284,6 +311,7 @@ export function useInterviewSession() {
           interviewContext: options?.interviewContext,
           interviewContextMeta: {
             contextVersion: "INTERVIEW_UI_CONTRACT_v1",
+            hardContextGuardEnabled: HARD_CONTEXT_GUARD_ENABLED,
             hasCandidateName: requiredContext.candidateReady,
             hasJobTitle: Boolean(options?.interviewContext?.jobTitle),
             hasVacancyText: Boolean(options?.interviewContext?.vacancyText),
@@ -428,6 +456,7 @@ export function useInterviewSession() {
       setMeetingId(null);
       setSessionId(null);
       setAvatarReady(false);
+      setAgentInputEnabled(true);
       setPhase("idle");
     } catch (err) {
       setPhase("failed");
@@ -464,8 +493,10 @@ export function useInterviewSession() {
     rtcState,
     error,
     remoteAudioStream,
+    agentInputEnabled,
     start,
     stop,
-    markFailed
+    markFailed,
+    setObserverTalkIsolation
   };
 }

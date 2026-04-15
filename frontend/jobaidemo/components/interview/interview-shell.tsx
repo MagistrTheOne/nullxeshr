@@ -9,6 +9,7 @@ import {
   getJobAiSourceStatus,
   listInterviews,
   savePrototypeCandidateFio,
+  sendRealtimeEvent,
   type InterviewDetail,
   type InterviewListRow,
   type JobAiSourceStatus
@@ -20,6 +21,14 @@ import { InterviewsTablePreview } from "./interviews-table-preview";
 import { JobAiSourceCard } from "./jobai-source-card";
 import { MeetingHeader } from "./meeting-header";
 import { ParticipantCard } from "./participant-card";
+import {
+  getObserverControlState,
+  setObserverControlState,
+  subscribeObserverControlState,
+  type ObserverControlState
+} from "@/lib/observer-control";
+
+const HARD_CONTEXT_GUARD_ENABLED = process.env.NEXT_PUBLIC_INTERVIEW_HARD_GUARD === "1";
 
 function candidateFioStorageKey(jobAiId: number | null): string {
   return jobAiId != null && jobAiId > 0 ? `jobaidemo:candidateFio:${jobAiId}` : "jobaidemo:candidateFio:default";
@@ -76,7 +85,9 @@ export function InterviewShell() {
     statusLabel,
     phase,
     error,
-    remoteAudioStream
+    remoteAudioStream,
+    agentInputEnabled,
+    setObserverTalkIsolation
   } =
     useInterviewSession();
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -98,6 +109,11 @@ export function InterviewShell() {
   const [fioSyncError, setFioSyncError] = useState<string | null>(null);
   const [sharedStreamClient, setSharedStreamClient] = useState<StreamVideoClient | null>(null);
   const [sharedStreamCall, setSharedStreamCall] = useState<ReturnType<StreamVideoClient["call"]> | null>(null);
+  const [observerControl, setObserverControl] = useState<ObserverControlState>(() => ({
+    visibility: "hidden",
+    talk: "off",
+    updatedAt: ""
+  }));
 
   const handleSharedCallChange = useCallback(
     ({
@@ -136,6 +152,14 @@ export function InterviewShell() {
   }, [requestedInterviewId]);
 
   useEffect(() => {
+    const initial = getObserverControlState(selectedInterviewId);
+    setObserverControl(initial);
+    return subscribeObserverControlState(selectedInterviewId, (next) => {
+      setObserverControl(next);
+    });
+  }, [selectedInterviewId]);
+
+  useEffect(() => {
     userEditedFio.current = false;
     hydratedServerFioFor.current = null;
     setFioSyncError(null);
@@ -166,6 +190,9 @@ export function InterviewShell() {
     () => rows.find((entry) => entry.jobAiId === selectedInterviewId) ?? null,
     [rows, selectedInterviewId]
   );
+
+  const observerVisible = observerControl.visibility === "visible";
+  const observerTalkActive = observerVisible && observerControl.talk === "on";
 
   const selectedInterviewDetailMatched = useMemo(() => {
     if (!selectedInterviewDetail || !selectedInterviewId) {
@@ -416,6 +443,41 @@ export function InterviewShell() {
     [loadInterviewDetail, loadInterviews, rows]
   );
 
+  const updateObserverControl = useCallback(
+    (next: Partial<ObserverControlState>) => {
+      const merged: ObserverControlState = {
+        visibility: next.visibility ?? observerControl.visibility,
+        talk: next.talk ?? observerControl.talk,
+        updatedAt: new Date().toISOString()
+      };
+      if (merged.visibility === "hidden") {
+        merged.talk = "off";
+      }
+      setObserverControl(merged);
+      setObserverControlState(selectedInterviewId, merged);
+    },
+    [observerControl.talk, observerControl.visibility, selectedInterviewId]
+  );
+
+  useEffect(() => {
+    if (phase !== "connected") {
+      return;
+    }
+    void setObserverTalkIsolation(observerTalkActive);
+  }, [observerTalkActive, phase, setObserverTalkIsolation]);
+
+  useEffect(() => {
+    if (!sessionId || phase !== "connected") {
+      return;
+    }
+    void sendRealtimeEvent(sessionId, {
+      type: "observer.presence.updated",
+      observerVisibility: observerControl.visibility,
+      observerTalk: observerControl.talk,
+      agentIsolationEnforced: true
+    }).catch(() => undefined);
+  }, [observerControl.talk, observerControl.visibility, phase, sessionId]);
+
   return (
     <div className="min-h-screen w-full bg-[#dfe4ec] px-6 py-8 md:px-10">
       <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-10">
@@ -489,7 +551,9 @@ export function InterviewShell() {
             void stop({ interviewId: selectedRow?.jobAiId });
           }}
           onFail={markFailed}
-          startDisabled={phase === "connected" || busy || !selectedRow || !contextHardReady}
+          startDisabled={
+            phase === "connected" || busy || !selectedRow || (HARD_CONTEXT_GUARD_ENABLED && !contextHardReady)
+          }
           stopDisabled={phase === "idle" || busy}
           failDisabled={phase === "idle" || busy}
         />
@@ -514,8 +578,9 @@ export function InterviewShell() {
         ) : null}
         {selectedRow && !contextHardReady ? (
           <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 shadow-sm">
-            Start Session заблокирован: для безопасного запуска агента нужны кандидат, должность, текст вакансии,
-            компания и вопросы из JobAI.
+            {HARD_CONTEXT_GUARD_ENABLED
+              ? "Start Session заблокирован: для безопасного запуска агента нужны кандидат, должность, текст вакансии, компания и вопросы из JobAI."
+              : "Внимание: контекст интервью неполный (кандидат/должность/текст вакансии/компания/вопросы). Hard guard временно отключен, Start Session разрешен."}
           </p>
         ) : null}
         <section className="grid gap-3 md:grid-cols-3">
@@ -550,6 +615,58 @@ export function InterviewShell() {
             )}
           </div>
         </section>
+        <section className="grid gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-slate-200 bg-white/70 px-4 py-3 text-sm text-slate-700 shadow-sm">
+            <p className="font-medium text-slate-800">Observer visibility</p>
+            <p className="mt-1">{observerVisible ? "visible" : "hidden (default)"}</p>
+            <div className="mt-2 flex gap-2">
+              <button
+                type="button"
+                className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                onClick={() => updateObserverControl({ visibility: "hidden" })}
+              >
+                Hide observer
+              </button>
+              <button
+                type="button"
+                className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                onClick={() => updateObserverControl({ visibility: "visible" })}
+              >
+                Show observer
+              </button>
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white/70 px-4 py-3 text-sm text-slate-700 shadow-sm">
+            <p className="font-medium text-slate-800">Observer talking</p>
+            <p className="mt-1">
+              {observerVisible ? (observerTalkActive ? "on" : "off") : "off (observer hidden)"}
+            </p>
+            <div className="mt-2 flex gap-2">
+              <button
+                type="button"
+                className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                onClick={() => updateObserverControl({ talk: "off" })}
+              >
+                Talk off
+              </button>
+              <button
+                type="button"
+                className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                onClick={() => updateObserverControl({ visibility: "visible", talk: "on" })}
+                disabled={!observerVisible}
+              >
+                Talk on
+              </button>
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white/70 px-4 py-3 text-sm text-slate-700 shadow-sm">
+            <p className="font-medium text-slate-800">Agent isolation</p>
+            <p className="mt-1">
+              enforced · uplink to agent:{" "}
+              <span className="font-medium">{agentInputEnabled ? "enabled" : "blocked for observer talk"}</span>
+            </p>
+          </div>
+        </section>
 
         <main className="mt-4 grid grid-cols-1 gap-8 lg:grid-cols-3 lg:items-stretch">
           <CandidateStreamCard
@@ -569,7 +686,11 @@ export function InterviewShell() {
             sharedClient={sharedStreamClient}
             sharedCall={sharedStreamCall}
           />
-          <ParticipantCard roleLabel="Наблюдатель" participantName="Наблюдатель" placeholder />
+          {observerVisible ? (
+            <ParticipantCard roleLabel="Наблюдатель" participantName="Наблюдатель" placeholder />
+          ) : (
+            <ParticipantCard roleLabel="Наблюдатель" participantName="Observer hidden by default" placeholder showControls={false} />
+          )}
         </main>
         <section className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-1">

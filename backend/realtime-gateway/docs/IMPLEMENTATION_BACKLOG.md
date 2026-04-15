@@ -14,6 +14,10 @@
 - Shared Stream call for candidate + HR cards (no second HR join).
 - Agent runtime context injection (`session.update` + strict start utterance) with debug trace in UI (`sessionId`, `jobAiId`, `jobTitle`).
 - Context anti-race fix: frontend uses detail only when `detail.interview.id === selectedInterviewId`.
+- Observer control contract implemented (`observerVisibility: hidden|visible`, `observerTalk: off|on`, default hidden).
+- Spectator page upgraded to 3-window mode (`Observer`, `Candidate`, `HR avatar`) on shared call.
+- Agent audio isolation enforcement added for observer-talk mode (candidate uplink to agent is blocked while observer talk is active).
+- Realtime telemetry events added: `observer.presence.updated` and `observer.agent_isolation.enforced`.
 
 ### In Progress / Next
 
@@ -25,6 +29,13 @@
 
 - Agent pipeline must send `avatar_ready` event consistently.
 - Confirm production frontend base URL for partner usage (candidate/spectator links).
+
+### Smoke Verification (2026-04-15)
+
+- [x] Scenario 1: observer hidden + talk off (default) -> observer control reflects hidden/off.
+- [x] Scenario 2: observer visible + talk off -> observer can join/listen, mic remains blocked.
+- [x] Scenario 3: observer visible + talk on -> observer mic can be enabled for candidate conversation.
+- [x] Scenario 4: agent isolation in observer-talk mode -> uplink to agent switches to blocked and emits enforcement event.
 
 ## Scope
 

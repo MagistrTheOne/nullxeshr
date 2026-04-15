@@ -29,6 +29,7 @@ export class WebRtcInterviewClient {
   private dataChannel: RTCDataChannel | null = null;
   private pendingEvents: Array<Record<string, unknown>> = [];
   private sessionId: string | null = null;
+  private audioInputEnabled = true;
   private state: WebRtcConnectionState = "idle";
   private onState?: (state: WebRtcConnectionState) => void;
   private onRemoteStream?: (stream: MediaStream) => void;
@@ -61,6 +62,7 @@ export class WebRtcInterviewClient {
       for (const track of stream.getTracks()) {
         pc.addTrack(track, stream);
       }
+      this.setAudioInputEnabled(this.audioInputEnabled);
     } catch {
       // Audio capture is optional for initial prototype.
     }
@@ -144,6 +146,20 @@ export class WebRtcInterviewClient {
 
   getState(): WebRtcConnectionState {
     return this.state;
+  }
+
+  setAudioInputEnabled(enabled: boolean): void {
+    this.audioInputEnabled = enabled;
+    if (!this.mediaStream) {
+      return;
+    }
+    for (const track of this.mediaStream.getAudioTracks()) {
+      track.enabled = enabled;
+    }
+  }
+
+  isAudioInputEnabled(): boolean {
+    return this.audioInputEnabled;
   }
 
   private sendToOpenAiDataChannel(payload: Record<string, unknown>): void {
