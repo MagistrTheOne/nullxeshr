@@ -1,4 +1,5 @@
 import { HttpError } from "../middleware/errorHandler";
+import { logger } from "../logging/logger";
 import { InMemoryInterviewStore, splitRuFullName } from "./interviewStore";
 import { JobAiClient } from "./jobaiClient";
 import { allowedJobAiTransitions, type JobAiInterview, type JobAiInterviewStatus, type StoredInterview } from "../types/interview";
@@ -19,7 +20,28 @@ export class InterviewSyncService {
 
   async ingestWebhook(payload: unknown): Promise<StoredInterview> {
     const interview = this.unwrapInterview(payload);
-    return this.store.upsert(interview);
+    const stored = this.store.upsert(interview);
+
+    // Partner request: once webhook is received, mark pending interviews as received.
+    // Do it as best-effort so webhook ingest never fails because of downstream status API issues.
+    if (stored.rawPayload.status === "pending" && this.jobAiClient.isConfigured()) {
+      try {
+        const received = await this.jobAiClient.updateInterviewStatus(stored.jobAiId, "received");
+        return this.store.upsert(received);
+      } catch (error) {
+        logger.warn(
+          {
+            jobAiId: stored.jobAiId,
+            fromStatus: stored.rawPayload.status,
+            toStatus: "received",
+            error: error instanceof Error ? error.message : String(error)
+          },
+          "webhook ingest: failed to auto-transition interview to received"
+        );
+      }
+    }
+
+    return stored;
   }
 
   async synchronize(skip = 0, take = 20): Promise<{ synced: number; total: number }> {

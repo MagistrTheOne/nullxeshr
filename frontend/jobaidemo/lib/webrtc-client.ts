@@ -26,6 +26,8 @@ function waitForIceGatheringComplete(pc: RTCPeerConnection): Promise<void> {
 export class WebRtcInterviewClient {
   private peerConnection: RTCPeerConnection | null = null;
   private mediaStream: MediaStream | null = null;
+  private dataChannel: RTCDataChannel | null = null;
+  private pendingEvents: Array<Record<string, unknown>> = [];
   private sessionId: string | null = null;
   private state: WebRtcConnectionState = "idle";
   private onState?: (state: WebRtcConnectionState) => void;
@@ -71,6 +73,7 @@ export class WebRtcInterviewClient {
     };
 
     const dataChannel = pc.createDataChannel("events");
+    this.dataChannel = dataChannel;
     dataChannel.onopen = () => {
       if (this.sessionId) {
         void sendRealtimeEvent(this.sessionId, {
@@ -79,6 +82,7 @@ export class WebRtcInterviewClient {
           message: "datachannel_open"
         });
       }
+      this.flushPendingEvents();
     };
 
     const offer = await pc.createOffer();
@@ -109,10 +113,10 @@ export class WebRtcInterviewClient {
   }
 
   async postEvent(payload: Record<string, unknown>): Promise<void> {
-    if (!this.sessionId) {
-      return;
+    this.sendToOpenAiDataChannel(payload);
+    if (this.sessionId) {
+      await sendRealtimeEvent(this.sessionId, payload);
     }
-    await sendRealtimeEvent(this.sessionId, payload);
   }
 
   close(): void {
@@ -128,6 +132,8 @@ export class WebRtcInterviewClient {
       this.peerConnection = null;
     }
 
+    this.dataChannel = null;
+    this.pendingEvents = [];
     this.sessionId = null;
     this.setState("closed");
   }
@@ -138,5 +144,27 @@ export class WebRtcInterviewClient {
 
   getState(): WebRtcConnectionState {
     return this.state;
+  }
+
+  private sendToOpenAiDataChannel(payload: Record<string, unknown>): void {
+    const serialized = JSON.stringify(payload);
+    if (this.dataChannel && this.dataChannel.readyState === "open") {
+      this.dataChannel.send(serialized);
+      return;
+    }
+    this.pendingEvents.push(payload);
+  }
+
+  private flushPendingEvents(): void {
+    if (!this.dataChannel || this.dataChannel.readyState !== "open") {
+      return;
+    }
+    while (this.pendingEvents.length > 0) {
+      const next = this.pendingEvents.shift();
+      if (!next) {
+        continue;
+      }
+      this.dataChannel.send(JSON.stringify(next));
+    }
   }
 }

@@ -14,6 +14,7 @@ type MeetingHeaderProps = {
   companyName?: string;
   meetingAt?: string;
   prototypeEntryUrl?: string;
+  onEntryUrlCommit?: (value: string) => void;
   candidateFio: string;
   onCandidateFioChange: (value: string) => void;
   onCandidateFioBlur?: () => void;
@@ -33,6 +34,7 @@ export function MeetingHeader({
   companyName,
   meetingAt,
   prototypeEntryUrl,
+  onEntryUrlCommit,
   candidateFio,
   onCandidateFioChange,
   onCandidateFioBlur,
@@ -68,6 +70,12 @@ export function MeetingHeader({
           <Input
             value={entryUrlInput}
             onChange={(e) => setEntryUrlInput(e.target.value)}
+            onBlur={() => onEntryUrlCommit?.(entryUrlInput)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                onEntryUrlCommit?.(entryUrlInput);
+              }
+            }}
             placeholder="Ссылка на интерфейс кандидата"
             className="min-h-12 flex-1 rounded-lg border border-transparent bg-white/70 py-3 text-base leading-normal text-slate-800 shadow-none placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-slate-300/60"
           />

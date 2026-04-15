@@ -52,6 +52,38 @@ function isIgnorableStatusTransitionError(error: unknown): boolean {
   return message.includes("interviews.status_change_not_allowed") || message.includes("status_change_failed");
 }
 
+function buildInterviewInstructions(context?: InterviewStartContext): string {
+  const candidateFullName =
+    context?.candidateFullName?.trim() ||
+    [context?.candidateFirstName?.trim(), context?.candidateLastName?.trim()].filter(Boolean).join(" ").trim() ||
+    "кандидат";
+  const company = context?.companyName?.trim() || "компания не указана";
+  const jobTitle = context?.jobTitle?.trim() || "должность не указана";
+  const vacancyText = context?.vacancyText?.trim() || "";
+  const greeting =
+    context?.greetingSpeech?.trim() ||
+    `Здравствуйте, ${candidateFullName}. Это интервью на позицию ${jobTitle} в компанию ${company}. Вы готовы пройти интервью?`;
+  const finalSpeech = context?.finalSpeech?.trim() || "Спасибо за интервью.";
+  const questions = (context?.questions ?? [])
+    .slice()
+    .sort((a, b) => a.order - b.order)
+    .map((q, idx) => `${idx + 1}. ${q.text}`)
+    .join("\n");
+
+  return [
+    "Ты HR-аватар для технического интервью.",
+    "Используй только контекст интервью ниже, не придумывай новые факты и не меняй компанию/должность/имя кандидата.",
+    `Кандидат: ${candidateFullName}`,
+    `Компания: ${company}`,
+    `Должность: ${jobTitle}`,
+    vacancyText ? `Описание вакансии: ${vacancyText}` : "Описание вакансии: не предоставлено",
+    questions ? `Вопросы для интервью:\n${questions}` : "Вопросы для интервью: не предоставлены",
+    `Приветствие (использовать дословно в начале): ${greeting}`,
+    `Финальная фраза (использовать дословно в конце): ${finalSpeech}`,
+    "Начни с приветствия и обязательно спроси: «Вы готовы пройти интервью?»"
+  ].join("\n\n");
+}
+
 async function transitionJobAiToInMeeting(interviewId: number): Promise<void> {
   const detail = await getInterviewById(interviewId).catch(() => null);
   const currentStatus = (detail?.projection.jobAiStatus ?? detail?.interview.status) as JobAiInterviewStatus | undefined;
@@ -213,10 +245,25 @@ export function useInterviewSession() {
         }
       }
 
+      const runtimeInstructions = buildInterviewInstructions(options?.interviewContext);
+      await rtc.postEvent({
+        type: "session.update",
+        session: {
+          instructions: runtimeInstructions
+        }
+      });
       await rtc.postEvent({
         type: "conversation.item.create",
         source: "frontend",
         message: "session_started"
+      });
+      await rtc.postEvent({
+        type: "response.create",
+        response: {
+          modalities: ["audio", "text"],
+          instructions:
+            "Сейчас начни интервью: произнеси приветствие из контекста, представь компанию/вакансию и спроси кандидата «Вы готовы пройти интервью?»"
+        }
       });
 
       setPhase("connected");

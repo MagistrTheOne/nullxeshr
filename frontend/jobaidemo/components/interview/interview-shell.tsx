@@ -30,6 +30,31 @@ function isJobAiNotConfiguredError(error: unknown): boolean {
   return message.includes("JobAI API is not configured") || message.includes("not configured");
 }
 
+function extractJobAiIdFromEntryUrl(input: string): number | null {
+  const value = input.trim();
+  if (!value) {
+    return null;
+  }
+
+  const fromPlain = value.match(/[?&]jobAiId=(\d+)/i);
+  if (fromPlain) {
+    const parsed = Number(fromPlain[1]);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  }
+
+  try {
+    const url = new URL(value, "http://localhost");
+    const raw = url.searchParams.get("jobAiId");
+    if (!raw) {
+      return null;
+    }
+    const parsed = Number(raw);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 export function InterviewShell() {
   const searchParams = useSearchParams();
   const requestedInterviewId = useMemo(() => {
@@ -154,6 +179,43 @@ export function InterviewShell() {
     };
   }, [candidateFio, selectedInterviewDetail, selectedRow]);
 
+  const contextReadiness = useMemo(() => {
+    const candidateReady = Boolean(
+      interviewStartContext?.candidateFullName?.trim() ||
+        interviewStartContext?.candidateFirstName?.trim() ||
+        interviewStartContext?.candidateLastName?.trim()
+    );
+    const vacancyReady = Boolean(interviewStartContext?.vacancyText?.trim() || interviewStartContext?.jobTitle?.trim());
+    const companyReady = Boolean(interviewStartContext?.companyName?.trim());
+    const questionsCount = interviewStartContext?.questions?.length ?? 0;
+    const questionsReady = questionsCount > 0;
+    return {
+      candidateReady,
+      vacancyReady,
+      companyReady,
+      questionsReady,
+      questionsCount
+    };
+  }, [interviewStartContext]);
+
+  const duplicateJobAiIds = useMemo(() => {
+    const byFingerprint = new Map<string, number[]>();
+    for (const row of rows) {
+      const key = [
+        row.candidateFirstName.trim().toLowerCase(),
+        row.candidateLastName.trim().toLowerCase(),
+        row.companyName.trim().toLowerCase(),
+        new Date(row.meetingAt).toISOString()
+      ].join("|");
+      const bucket = byFingerprint.get(key) ?? [];
+      bucket.push(row.jobAiId);
+      byFingerprint.set(key, bucket);
+    }
+    return Array.from(byFingerprint.values())
+      .filter((ids) => ids.length > 1)
+      .flat();
+  }, [rows]);
+
   const loadInterviews = useCallback(async () => {
     setLoadingRows(true);
     setRowsError(null);
@@ -246,11 +308,22 @@ export function InterviewShell() {
       return;
     }
     const serverFio = selectedInterviewDetail.prototypeCandidate?.sourceFullName?.trim();
-    if (serverFio) {
+    const fallbackFromInterview = [
+      selectedInterviewDetail.interview.candidateFirstName?.trim(),
+      selectedInterviewDetail.interview.candidateLastName?.trim()
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    const nextFio =
+      serverFio ||
+      (!userEditedFio.current && !candidateFioRef.current.trim() ? fallbackFromInterview : "");
+
+    if (nextFio) {
       skipNextFioPersist.current = true;
-      setCandidateFio(serverFio);
+      setCandidateFio(nextFio);
       if (typeof window !== "undefined") {
-        sessionStorage.setItem(candidateFioStorageKey(selectedInterviewId), serverFio);
+        sessionStorage.setItem(candidateFioStorageKey(selectedInterviewId), nextFio);
       }
     }
     hydratedServerFioFor.current = selectedInterviewId;
@@ -298,6 +371,22 @@ export function InterviewShell() {
     void pushFioToGateway();
   }, [pushFioToGateway]);
 
+  const handleEntryUrlCommit = useCallback(
+    (value: string) => {
+      const parsedId = extractJobAiIdFromEntryUrl(value);
+      if (!parsedId) {
+        return;
+      }
+      const existsInRows = rows.some((entry) => entry.jobAiId === parsedId);
+      setSelectedInterviewId(parsedId);
+      void loadInterviewDetail(parsedId, !existsInRows);
+      if (!existsInRows) {
+        void loadInterviews();
+      }
+    },
+    [loadInterviewDetail, loadInterviews, rows]
+  );
+
   return (
     <div className="min-h-screen w-full bg-[#dfe4ec] px-6 py-8 md:px-10">
       <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-10">
@@ -311,6 +400,7 @@ export function InterviewShell() {
           prototypeEntryUrl={
             selectedRow && origin ? `${origin}${selectedRow.candidateEntryPath}` : undefined
           }
+          onEntryUrlCommit={handleEntryUrlCommit}
           candidateFio={candidateFio}
           onCandidateFioChange={(value) => {
             userEditedFio.current = true;
@@ -389,6 +479,25 @@ export function InterviewShell() {
             {fioSyncError}
           </p>
         ) : null}
+        <section className="grid gap-3 md:grid-cols-2">
+          <div className="rounded-xl border border-slate-200 bg-white/70 px-4 py-3 text-sm text-slate-700 shadow-sm">
+            <p className="font-medium text-slate-800">Сигнал HR-аватара</p>
+            <p className="mt-1">
+              {avatarReady
+                ? "avatar_ready получен: HR-окно может подключаться боевым режимом."
+                : "Ожидаем avatar_ready от agent-pipeline: боевое подключение HR заблокировано."}
+            </p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white/70 px-4 py-3 text-sm text-slate-700 shadow-sm">
+            <p className="font-medium text-slate-800">Контекст для агента </p>
+            <p className="mt-1">
+              {contextReadiness.candidateReady ? "✅" : "⬜"} Кандидат{" · "}
+              {contextReadiness.vacancyReady ? "✅" : "⬜"} Вакансия/должность{" · "}
+              {contextReadiness.companyReady ? "✅" : "⬜"} Компания{" · "}
+              {contextReadiness.questionsReady ? "✅" : "⬜"} Вопросы ({contextReadiness.questionsCount})
+            </p>
+          </div>
+        </section>
 
         <main className="mt-4 grid grid-cols-1 gap-8 lg:grid-cols-3 lg:items-stretch">
           <CandidateStreamCard
@@ -432,6 +541,7 @@ export function InterviewShell() {
         <InterviewsTablePreview
           rows={rows}
           selectedInterviewId={selectedInterviewId}
+          duplicateJobAiIds={duplicateJobAiIds}
           loading={loadingRows}
           error={rowsError}
           onRefresh={() => {

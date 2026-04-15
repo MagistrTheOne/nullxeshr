@@ -19,6 +19,7 @@ import { getInterviewById, type InterviewDetail, type InterviewListRow } from "@
 type InterviewsTablePreviewProps = {
   rows: InterviewListRow[];
   selectedInterviewId: number | null;
+  duplicateJobAiIds?: number[];
   loading?: boolean;
   error?: string | null;
   onRefresh?: () => void;
@@ -42,6 +43,7 @@ function copyText(text: string): void {
 export function InterviewsTablePreview({
   rows,
   selectedInterviewId,
+  duplicateJobAiIds = [],
   loading = false,
   error = null,
   onRefresh,
@@ -105,7 +107,16 @@ export function InterviewsTablePreview({
               {rows.map((row) => (
                 <TableRow key={row.jobAiId} className={selectedInterviewId === row.jobAiId ? "bg-sky-100/40" : ""}>
                   <TableCell className="font-medium">{row.nullxesMeetingId ?? "—"}</TableCell>
-                  <TableCell>{row.jobAiId}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <span>{row.jobAiId}</span>
+                      {duplicateJobAiIds.includes(row.jobAiId) ? (
+                        <Badge variant="secondary" className="bg-amber-100 text-amber-900">
+                          возможный дубль
+                        </Badge>
+                      ) : null}
+                    </div>
+                  </TableCell>
                   <TableCell>{row.candidateFirstName}</TableCell>
                   <TableCell>{row.candidateLastName}</TableCell>
                   <TableCell>{row.companyName}</TableCell>
