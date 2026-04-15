@@ -208,18 +208,27 @@ export function InterviewShell() {
         interviewStartContext?.candidateFirstName?.trim() ||
         interviewStartContext?.candidateLastName?.trim()
     );
-    const vacancyReady = Boolean(interviewStartContext?.vacancyText?.trim() || interviewStartContext?.jobTitle?.trim());
+    const jobTitleReady = Boolean(interviewStartContext?.jobTitle?.trim());
+    const vacancyTextReady = Boolean(interviewStartContext?.vacancyText?.trim());
     const companyReady = Boolean(interviewStartContext?.companyName?.trim());
     const questionsCount = interviewStartContext?.questions?.length ?? 0;
     const questionsReady = questionsCount > 0;
     return {
       candidateReady,
-      vacancyReady,
+      jobTitleReady,
+      vacancyTextReady,
       companyReady,
       questionsReady,
       questionsCount
     };
   }, [interviewStartContext]);
+
+  const contextHardReady =
+    contextReadiness.candidateReady &&
+    contextReadiness.jobTitleReady &&
+    contextReadiness.vacancyTextReady &&
+    contextReadiness.companyReady &&
+    contextReadiness.questionsReady;
 
   const duplicateJobAiIds = useMemo(() => {
     const byFingerprint = new Map<string, number[]>();
@@ -435,6 +444,7 @@ export function InterviewShell() {
                 activeInterviewId &&
                 (!selectedInterviewDetailMatched ||
                   !contextForStart?.jobTitle ||
+                  !contextForStart?.vacancyText ||
                   !contextForStart?.companyName ||
                   (contextForStart.questions?.length ?? 0) === 0)
               ) {
@@ -479,7 +489,7 @@ export function InterviewShell() {
             void stop({ interviewId: selectedRow?.jobAiId });
           }}
           onFail={markFailed}
-          startDisabled={phase === "connected" || busy}
+          startDisabled={phase === "connected" || busy || !selectedRow || !contextHardReady}
           stopDisabled={phase === "idle" || busy}
           failDisabled={phase === "idle" || busy}
         />
@@ -502,6 +512,12 @@ export function InterviewShell() {
             {fioSyncError}
           </p>
         ) : null}
+        {selectedRow && !contextHardReady ? (
+          <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 shadow-sm">
+            Start Session заблокирован: для безопасного запуска агента нужны кандидат, должность, текст вакансии,
+            компания и вопросы из JobAI.
+          </p>
+        ) : null}
         <section className="grid gap-3 md:grid-cols-3">
           <div className="rounded-xl border border-slate-200 bg-white/70 px-4 py-3 text-sm text-slate-700 shadow-sm">
             <p className="font-medium text-slate-800">Сигнал HR-аватара</p>
@@ -515,7 +531,8 @@ export function InterviewShell() {
             <p className="font-medium text-slate-800">Контекст для агента </p>
             <p className="mt-1">
               {contextReadiness.candidateReady ? "✅" : "⬜"} Кандидат{" · "}
-              {contextReadiness.vacancyReady ? "✅" : "⬜"} Вакансия/должность{" · "}
+              {contextReadiness.jobTitleReady ? "✅" : "⬜"} Должность{" · "}
+              {contextReadiness.vacancyTextReady ? "✅" : "⬜"} Текст вакансии{" · "}
               {contextReadiness.companyReady ? "✅" : "⬜"} Компания{" · "}
               {contextReadiness.questionsReady ? "✅" : "⬜"} Вопросы ({contextReadiness.questionsCount})
             </p>

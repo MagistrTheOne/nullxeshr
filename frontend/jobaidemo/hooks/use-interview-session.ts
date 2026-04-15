@@ -63,6 +63,37 @@ function isIgnorableStatusTransitionError(error: unknown): boolean {
   return message.includes("interviews.status_change_not_allowed") || message.includes("status_change_failed");
 }
 
+type RequiredContextCheck = {
+  candidateReady: boolean;
+  companyReady: boolean;
+  jobTitleReady: boolean;
+  vacancyTextReady: boolean;
+  questionsReady: boolean;
+  questionsCount: number;
+};
+
+function evaluateRequiredContext(context?: InterviewStartContext): RequiredContextCheck {
+  const candidateReady = Boolean(
+    context?.candidateFullName?.trim() ||
+      context?.candidateFirstName?.trim() ||
+      context?.candidateLastName?.trim()
+  );
+  const companyReady = Boolean(context?.companyName?.trim());
+  const jobTitleReady = Boolean(context?.jobTitle?.trim());
+  const vacancyTextReady = Boolean(context?.vacancyText?.trim());
+  const questionsCount = context?.questions?.length ?? 0;
+  const questionsReady = questionsCount > 0;
+
+  return {
+    candidateReady,
+    companyReady,
+    jobTitleReady,
+    vacancyTextReady,
+    questionsReady,
+    questionsCount
+  };
+}
+
 function buildInterviewInstructions(context?: InterviewStartContext): string {
   const candidateFullName =
     context?.candidateFullName?.trim() ||
@@ -227,6 +258,19 @@ export function useInterviewSession() {
       }
     }
 
+    const requiredContext = evaluateRequiredContext(options?.interviewContext);
+    if (
+      !requiredContext.candidateReady ||
+      !requiredContext.companyReady ||
+      !requiredContext.jobTitleReady ||
+      !requiredContext.vacancyTextReady ||
+      !requiredContext.questionsReady
+    ) {
+      throw new Error(
+        "Start Session blocked: interview context is incomplete (candidate, company, job title, vacancy text, questions)."
+      );
+    }
+
     setPhase("starting");
     setError(null);
 
@@ -240,10 +284,11 @@ export function useInterviewSession() {
           interviewContext: options?.interviewContext,
           interviewContextMeta: {
             contextVersion: "INTERVIEW_UI_CONTRACT_v1",
+            hasCandidateName: requiredContext.candidateReady,
             hasJobTitle: Boolean(options?.interviewContext?.jobTitle),
             hasVacancyText: Boolean(options?.interviewContext?.vacancyText),
             hasCompanyName: Boolean(options?.interviewContext?.companyName),
-            questionCount: options?.interviewContext?.questions?.length ?? 0
+            questionCount: requiredContext.questionsCount
           }
         }
       });

@@ -1,8 +1,35 @@
 # Nullxes AI Prototype - Implementation Backlog
 
+## Current Status (2026-04-15)
+
+### Completed
+
+- JobAI list/detail/status integration via gateway.
+- Webhook ingest with idempotent upsert by `jobAiId`.
+- Candidate/spectator relative links (`candidateUrl`, `spectatorUrl`) in webhook response.
+- Interview table and detail modal on frontend wired to gateway.
+- Avatar script card reads only JobAI-backed fields (`greetingSpeech`, `specialty.questions`, `finalSpeech`), demo fallbacks removed.
+- Runtime status transitions aligned to FSM (`pending -> received -> in_meeting -> completed`) with soft handling of transition conflicts.
+- Realtime session explicit close on stop (`DELETE /realtime/session/:id`).
+- Shared Stream call for candidate + HR cards (no second HR join).
+- Agent runtime context injection (`session.update` + strict start utterance) with debug trace in UI (`sessionId`, `jobAiId`, `jobTitle`).
+- Context anti-race fix: frontend uses detail only when `detail.interview.id === selectedInterviewId`.
+
+### In Progress / Next
+
+- Add strict start guard: block `Start Session` when required context is incomplete (`candidate`, `jobTitle`, `company`, `questions`).
+- Add optional UI toggle to hide or collapse "possible duplicates" rows in interview table.
+- Add one-click operator diagnostics panel (latest transition error + latest context trace + avatar_ready timeline).
+
+### External Dependencies
+
+- Agent pipeline must send `avatar_ready` event consistently.
+- Confirm production frontend base URL for partner usage (candidate/spectator links).
+
 ## Scope
 
 Backlog for architecture-first prototype delivery:
+
 - Nullxes AI interview runtime
 - JobAI interview source integration
 - Interview list/table experience
@@ -14,6 +41,7 @@ Security hardening is intentionally deprioritized in this backlog.
 ## Milestone M1 - Interview Data Foundation
 
 ### BL-001 JobAI client adapter
+
 - Build typed client for:
   - `GET /ai-api/interviews`
   - `GET /ai-api/interviews/{id}`
@@ -24,6 +52,7 @@ Security hardening is intentionally deprioritized in this backlog.
   - smoke test with real dev credentials
 
 ### BL-002 Interview ingest webhook
+
 - Create `POST /webhooks/jobai/interviews` endpoint.
 - Accept incoming event/id and fetch full interview object from JobAI.
 - **DoD**
@@ -32,6 +61,7 @@ Security hardening is intentionally deprioritized in this backlog.
   - logs include correlation id + jobai_id
 
 ### BL-003 Interview storage model
+
 - Add persistence (preferred: PostgreSQL) tables:
   - `interviews`
   - `interview_payloads`
@@ -44,6 +74,7 @@ Security hardening is intentionally deprioritized in this backlog.
 ## Milestone M2 - Interview Table & View APIs
 
 ### BL-004 List API
+
 - Build `GET /interviews` with pagination and filter by status/date.
 - **DoD**
   - returns fields required by table
@@ -51,6 +82,7 @@ Security hardening is intentionally deprioritized in this backlog.
   - includes `nullxes_status` and `jobai_status`
 
 ### BL-005 Detail API
+
 - Build `GET /interviews/:nullxesId` returning:
   - interview details
   - specialty + questions tree
@@ -60,6 +92,7 @@ Security hardening is intentionally deprioritized in this backlog.
   - response time acceptable on realistic sample size
 
 ### BL-006 Front table integration contract
+
 - Freeze response schemas for FE:
   - list row shape
   - details modal shape
@@ -70,6 +103,7 @@ Security hardening is intentionally deprioritized in this backlog.
 ## Milestone M3 - Candidate/Spectator Entry Links
 
 ### BL-007 Candidate link issuance
+
 - `POST /interviews/:nullxesId/links/candidate`
 - Generates short-lived signed token and join URL.
 - **DoD**
@@ -77,6 +111,7 @@ Security hardening is intentionally deprioritized in this backlog.
   - old links can be invalidated/regenerated
 
 ### BL-008 Spectator link issuance
+
 - `POST /interviews/:nullxesId/links/spectator`
 - Returns spectator join URL and UI-open helper URL.
 - **DoD**
@@ -84,6 +119,7 @@ Security hardening is intentionally deprioritized in this backlog.
   - audit trail for link generation events
 
 ### BL-009 Join endpoint contract
+
 - `GET /join/candidate/:token`
 - `GET /join/spectator/:token`
 - Resolve token -> interview context -> runtime bootstrap payload.
@@ -94,12 +130,14 @@ Security hardening is intentionally deprioritized in this backlog.
 ## Milestone M4 - Avatar Question Runtime
 
 ### BL-010 Question tree feed
+
 - Backend exposes ordered questions from `specialty.questions`.
 - **DoD**
   - strict ordering by `order`
   - preserved original text and structure
 
 ### BL-011 Avatar script bundle
+
 - Build runtime payload:
   - greetingSpeech
   - ordered questions
@@ -110,6 +148,7 @@ Security hardening is intentionally deprioritized in this backlog.
   - matches stored interview payload
 
 ### BL-012 Runtime event persistence
+
 - Persist avatar progress events:
   - current question index
   - question asked/completed
@@ -121,6 +160,7 @@ Security hardening is intentionally deprioritized in this backlog.
 ## Milestone M5 - Candidate/Spectator Video Validation
 
 ### BL-013 Media checkpoints API
+
 - Add runtime checkpoints:
   - candidate video connected
   - spectator video connected
@@ -130,6 +170,7 @@ Security hardening is intentionally deprioritized in this backlog.
   - status badge derivation supported
 
 ### BL-014 Live session view model
+
 - API exposes current session participants and stream states.
 - **DoD**
   - candidate/spectator role separation
@@ -138,6 +179,7 @@ Security hardening is intentionally deprioritized in this backlog.
 ## Milestone M6 - Documentation & Demo Pack
 
 ### BL-015 Technical documentation
+
 - Update docs:
   - component architecture
   - sequence flows
@@ -148,6 +190,7 @@ Security hardening is intentionally deprioritized in this backlog.
   - runnable curl examples included
 
 ### BL-016 Demo scripts
+
 - Prepare step-by-step demo scenarios:
   1. JobAI interview ingest
   2. interview list render
@@ -159,6 +202,7 @@ Security hardening is intentionally deprioritized in this backlog.
   - each scenario has input, expected output, and rollback notes
 
 ### BL-017 Daily summary format
+
 - Add `DAILY_SUMMARY_TEMPLATE.md` with:
   - delivered features
   - blockers
@@ -183,3 +227,4 @@ Security hardening is intentionally deprioritized in this backlog.
 - Day 4: M3
 - Day 5: M4 + M5 baseline
 - Day 6: M6 and end-to-end demo preparation
+
