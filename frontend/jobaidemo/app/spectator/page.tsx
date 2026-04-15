@@ -18,7 +18,7 @@ function SpectatorBody() {
         </CardHeader>
         <CardContent className="space-y-4 text-sm text-slate-600">
           <p>
-            Zoom в прототипе не используется. Дальнейший вход в комнату — через Stream и общий{" "}
+            Вход в комнату — через Stream и общий{" "}
             <code className="rounded bg-white/60 px-1">meetingId</code> на основной странице интервью.
           </p>
           <p>

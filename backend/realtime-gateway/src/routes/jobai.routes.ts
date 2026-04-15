@@ -43,7 +43,10 @@ export function createJobAiRouter(service: InterviewSyncService): express.Router
     const stored = await service.ingestWebhook(req.body);
     res.status(202).json({
       interview: stored.rawPayload,
-      projection: stored.projection
+      projection: stored.projection,
+      // Relative links for JobAI UI: base URL is resolved on caller side.
+      candidateUrl: stored.projection.candidateEntryPath,
+      spectatorUrl: stored.projection.spectatorEntryPath
     });
   }));
 

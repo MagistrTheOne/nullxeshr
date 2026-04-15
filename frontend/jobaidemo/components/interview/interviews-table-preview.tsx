@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { ExternalLink } from "lucide-react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,6 +34,9 @@ function openPath(path: string): void {
 
 function copyText(text: string): void {
   void navigator.clipboard.writeText(text);
+  toast.success("Скопировано", {
+    description: "Ссылка сохранена в буфер обмена."
+  });
 }
 
 export function InterviewsTablePreview({
@@ -68,7 +72,7 @@ export function InterviewsTablePreview({
   return (
     <Card className="rounded-2xl border-0 bg-[#d9dee7] shadow-[-10px_-10px_20px_rgba(255,255,255,.9),10px_10px_22px_rgba(163,177,198,.55)]">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-base text-slate-700">Список собеседований (live)</CardTitle>
+        <CardTitle className="text-base text-slate-700">Список собеседований</CardTitle>
         <Button size="sm" variant="secondary" onClick={onRefresh} disabled={loading}>
           {loading ? "Обновление..." : "Обновить"}
         </Button>

@@ -95,7 +95,7 @@ flowchart TB
 
 | Метод | Путь | Назначение |
 |-------|------|------------|
-| POST | `/webhooks/jobai/interviews` | Ingest webhook |
+| POST | `/webhooks/jobai/interviews` | Ingest webhook; в ответе `candidateUrl` и `spectatorUrl` (relative path, без base URL) |
 | POST | `/jobai/sync` | Синк из JobAI в store |
 | GET | `/interviews?skip&take&sync` | Список для UI |
 | GET | `/interviews/source/status` | Статус интеграции + sync meta |
@@ -119,6 +119,9 @@ flowchart TB
 | `JOBAI_API_AUTH_MODE` | `none` \| `bearer` \| `basic` |
 | `JOBAI_API_TOKEN` / `JOBAI_API_BASIC_USER` + `JOBAI_API_BASIC_PASSWORD` | Доступ к JobAI API |
 | `JOBAI_INGEST_SECRET` | Если задан — проверка webhook (Authorization или `x-jobai-ingest-secret`) |
+
+Инструкция для стороны JobAI (что выдать, curl-проверка): [backend/realtime-gateway/docs/JOBAI_PARTNER_CREDENTIALS.md](../backend/realtime-gateway/docs/JOBAI_PARTNER_CREDENTIALS.md).
+Контракт UI/аватар-контекста (детали, справочно, candidate/spectator links): [backend/realtime-gateway/docs/INTERVIEW_UI_CONTRACT.md](../backend/realtime-gateway/docs/INTERVIEW_UI_CONTRACT.md).
 
 OpenAI и webhooks Nullxes → заказчик (существующие `JOBAI_WEBHOOK_*` для **исходящих** webhooks встреч) описаны в том же `env.ts`.
 

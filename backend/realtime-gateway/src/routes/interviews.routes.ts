@@ -23,6 +23,10 @@ const sessionLinkSchema = z.object({
   nullxesStatus: z.enum(["idle", "in_meeting", "completed", "stopped_during_meeting", "failed"]).optional()
 });
 
+const prototypeFioSchema = z.object({
+  fullName: z.string().max(500)
+});
+
 function asyncHandler(
   handler: (req: Request, res: Response) => Promise<void>
 ): (req: Request, res: Response, next: express.NextFunction) => void {
@@ -112,6 +116,17 @@ export function createInterviewsRouter(service: InterviewSyncService): express.R
     }
 
     const updated = service.attachSession(id, parsed.data);
+    res.status(200).json(serializeInterviewDetail(updated));
+  });
+
+  router.post("/:id/prototype-candidate-fio", (req: Request, res: Response) => {
+    const id = parseIntegerParam(req.params.id, "interview id");
+    const parsed = prototypeFioSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new HttpError(400, "Invalid prototype-candidate-fio payload", parsed.error.flatten());
+    }
+
+    const updated = service.setPrototypeCandidateFio(id, parsed.data.fullName);
     res.status(200).json(serializeInterviewDetail(updated));
   });
 

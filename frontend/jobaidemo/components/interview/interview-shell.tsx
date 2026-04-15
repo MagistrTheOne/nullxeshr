@@ -2,8 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useInterviewSession } from "@/hooks/use-interview-session";
-import { getInterviewById, getJobAiSourceStatus, listInterviews, type InterviewDetail, type InterviewListRow, type JobAiSourceStatus } from "@/lib/api";
+import { useInterviewSession, type InterviewStartContext } from "@/hooks/use-interview-session";
+import {
+  getInterviewById,
+  getJobAiSourceStatus,
+  listInterviews,
+  savePrototypeCandidateFio,
+  type InterviewDetail,
+  type InterviewListRow,
+  type JobAiSourceStatus
+} from "@/lib/api";
 import { AvatarStreamCard } from "./avatar-stream-card";
 import { AvatarScriptCard } from "./avatar-script-card";
 import { CandidateStreamCard } from "./candidate-stream-card";
@@ -12,8 +20,25 @@ import { JobAiSourceCard } from "./jobai-source-card";
 import { MeetingHeader } from "./meeting-header";
 import { ParticipantCard } from "./participant-card";
 
+function candidateFioStorageKey(jobAiId: number | null): string {
+  return jobAiId != null && jobAiId > 0 ? `jobaidemo:candidateFio:${jobAiId}` : "jobaidemo:candidateFio:default";
+}
+
+function isJobAiNotConfiguredError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("JobAI API is not configured") || message.includes("not configured");
+}
+
 export function InterviewShell() {
   const searchParams = useSearchParams();
+  const requestedInterviewId = useMemo(() => {
+    const raw = searchParams.get("jobAiId");
+    if (!raw) {
+      return null;
+    }
+    const id = Number(raw);
+    return Number.isInteger(id) && id > 0 ? id : null;
+  }, [searchParams]);
   const { start, stop, markFailed, meetingId, sessionId, statusLabel, phase, error, remoteAudioStream } =
     useInterviewSession();
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -24,6 +49,17 @@ export function InterviewShell() {
   const [selectedInterviewDetail, setSelectedInterviewDetail] = useState<InterviewDetail | null>(null);
   const [loadingRows, setLoadingRows] = useState(false);
   const [rowsError, setRowsError] = useState<string | null>(null);
+  const [rowsWarning, setRowsWarning] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [candidateFio, setCandidateFio] = useState("");
+  const skipNextFioPersist = useRef(false);
+  const candidateFioRef = useRef("");
+  const fioSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const userEditedFio = useRef(false);
+  const hydratedServerFioFor = useRef<number | null>(null);
+  const [fioSyncError, setFioSyncError] = useState<string | null>(null);
+
+  candidateFioRef.current = candidateFio;
 
   useEffect(() => {
     if (!audioRef.current) {
@@ -39,32 +75,102 @@ export function InterviewShell() {
   }, []);
 
   useEffect(() => {
-    const raw = searchParams.get("jobAiId");
-    if (!raw) {
+    if (!requestedInterviewId) {
       return;
     }
-    const id = Number(raw);
-    if (Number.isInteger(id) && id > 0) {
-      setSelectedInterviewId(id);
+    setSelectedInterviewId(requestedInterviewId);
+  }, [requestedInterviewId]);
+
+  useEffect(() => {
+    userEditedFio.current = false;
+    hydratedServerFioFor.current = null;
+    setFioSyncError(null);
+  }, [selectedInterviewId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
     }
-  }, [searchParams]);
+    const key = candidateFioStorageKey(selectedInterviewId);
+    skipNextFioPersist.current = true;
+    setCandidateFio(sessionStorage.getItem(key) ?? "");
+  }, [selectedInterviewId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (skipNextFioPersist.current) {
+      skipNextFioPersist.current = false;
+      return;
+    }
+    const key = candidateFioStorageKey(selectedInterviewId);
+    sessionStorage.setItem(key, candidateFio);
+  }, [candidateFio, selectedInterviewId]);
 
   const selectedRow = useMemo(
     () => rows.find((entry) => entry.jobAiId === selectedInterviewId) ?? null,
     [rows, selectedInterviewId]
   );
 
+  const interviewStartContext = useMemo<InterviewStartContext | undefined>(() => {
+    if (!selectedRow && !selectedInterviewDetail) {
+      return undefined;
+    }
+    const first = candidateFio.trim() || selectedRow?.candidateFirstName || selectedInterviewDetail?.interview.candidateFirstName || "";
+    const last = selectedRow?.candidateLastName || selectedInterviewDetail?.interview.candidateLastName || "";
+    const full = candidateFio.trim() || [first, last].filter(Boolean).join(" ").trim();
+    return {
+      candidateFirstName: first || undefined,
+      candidateLastName: last || undefined,
+      candidateFullName: full || undefined,
+      jobTitle: selectedInterviewDetail?.interview.jobTitle,
+      vacancyText: selectedInterviewDetail?.interview.vacancyText,
+      companyName: selectedRow?.companyName || selectedInterviewDetail?.interview.companyName,
+      greetingSpeech:
+        (selectedInterviewDetail?.interview.greetingSpeechResolved as string | undefined) ??
+        selectedInterviewDetail?.interview.greetingSpeech,
+      finalSpeech:
+        (selectedInterviewDetail?.interview.finalSpeechResolved as string | undefined) ??
+        selectedInterviewDetail?.interview.finalSpeech,
+      questions: selectedInterviewDetail?.interview.specialty?.questions
+    };
+  }, [candidateFio, selectedInterviewDetail, selectedRow]);
+
   const loadInterviews = useCallback(async () => {
     setLoadingRows(true);
     setRowsError(null);
+    setRowsWarning(null);
     try {
-      const [list, source] = await Promise.all([
-        listInterviews({ skip: 0, take: 20, sync: true }),
-        getJobAiSourceStatus()
-      ]);
+      try {
+        const source = await getJobAiSourceStatus();
+        setSourceStatus(source);
+      } catch (sourceErr) {
+        setSourceStatus(null);
+        setRowsWarning(
+          sourceErr instanceof Error ? sourceErr.message : "Не удалось получить статус интеграции JobAI"
+        );
+      }
+
+      let list: { interviews: InterviewListRow[]; count: number };
+      try {
+        list = await listInterviews({ skip: 0, take: 20, sync: true });
+      } catch (syncErr) {
+        if (isJobAiNotConfiguredError(syncErr)) {
+          setRowsWarning(
+            "JobAI API не настроен на gateway — загрузка списка без синхронизации (только локальный кэш). Укажите JOBAI_* в .env бэкенда для GET/POST по Swagger."
+          );
+          list = await listInterviews({ skip: 0, take: 20, sync: false });
+        } else {
+          throw syncErr;
+        }
+      }
+
       setRows(list.interviews);
-      setSourceStatus(source);
       setSelectedInterviewId((current) => {
+        if (requestedInterviewId && list.interviews.some((item) => item.jobAiId === requestedInterviewId)) {
+          return requestedInterviewId;
+        }
         if (current && list.interviews.some((item) => item.jobAiId === current)) {
           return current;
         }
@@ -75,14 +181,27 @@ export function InterviewShell() {
     } finally {
       setLoadingRows(false);
     }
-  }, []);
+  }, [requestedInterviewId]);
 
-  const loadInterviewDetail = useCallback(async (jobAiId: number) => {
+  const loadInterviewDetail = useCallback(async (jobAiId: number, forceSync = false) => {
+    setDetailError(null);
     try {
-      const detail = await getInterviewById(jobAiId);
+      const detail = await getInterviewById(jobAiId, forceSync);
       setSelectedInterviewDetail(detail);
-    } catch (detailError) {
-      setRowsError(detailError instanceof Error ? detailError.message : "Failed to load interview details");
+    } catch (detailErr) {
+      const message = detailErr instanceof Error ? detailErr.message : "Failed to load interview details";
+      if (!forceSync && message.includes("interviews.not_found")) {
+        try {
+          const synced = await getInterviewById(jobAiId, true);
+          setSelectedInterviewDetail(synced);
+          setDetailError(null);
+          return;
+        } catch {
+          // Fall through to soft error handling below.
+        }
+      }
+      setSelectedInterviewDetail(null);
+      setDetailError(message);
     }
   }, []);
 
@@ -95,12 +214,76 @@ export function InterviewShell() {
       setSelectedInterviewDetail(null);
       return;
     }
-    void loadInterviewDetail(selectedInterviewId);
-  }, [loadInterviewDetail, selectedInterviewId]);
+    const hasRowInList = rows.some((entry) => entry.jobAiId === selectedInterviewId);
+    void loadInterviewDetail(selectedInterviewId, !hasRowInList);
+  }, [loadInterviewDetail, rows, selectedInterviewId]);
+
+  useEffect(() => {
+    if (!selectedInterviewId || !selectedInterviewDetail) {
+      return;
+    }
+    if (selectedInterviewDetail.interview.id !== selectedInterviewId) {
+      return;
+    }
+    if (hydratedServerFioFor.current === selectedInterviewId) {
+      return;
+    }
+    const serverFio = selectedInterviewDetail.prototypeCandidate?.sourceFullName?.trim();
+    if (serverFio) {
+      skipNextFioPersist.current = true;
+      setCandidateFio(serverFio);
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem(candidateFioStorageKey(selectedInterviewId), serverFio);
+      }
+    }
+    hydratedServerFioFor.current = selectedInterviewId;
+  }, [selectedInterviewId, selectedInterviewDetail]);
+
+  const pushFioToGateway = useCallback(async () => {
+    const id = selectedInterviewId;
+    if (!id || id <= 0) {
+      setFioSyncError("Выберите собеседование в таблице, затем сохраните ФИО.");
+      return;
+    }
+    setFioSyncError(null);
+    try {
+      await savePrototypeCandidateFio(id, candidateFioRef.current);
+      await Promise.all([loadInterviewDetail(id), loadInterviews()]);
+    } catch (err) {
+      setFioSyncError(err instanceof Error ? err.message : "Не удалось сохранить ФИО");
+    }
+  }, [loadInterviewDetail, loadInterviews, selectedInterviewId]);
+
+  useEffect(() => {
+    if (!selectedInterviewId || !userEditedFio.current) {
+      return;
+    }
+    if (fioSaveTimer.current) {
+      clearTimeout(fioSaveTimer.current);
+    }
+    fioSaveTimer.current = setTimeout(() => {
+      fioSaveTimer.current = null;
+      void pushFioToGateway();
+    }, 700);
+    return () => {
+      if (fioSaveTimer.current) {
+        clearTimeout(fioSaveTimer.current);
+        fioSaveTimer.current = null;
+      }
+    };
+  }, [candidateFio, pushFioToGateway, selectedInterviewId]);
+
+  const flushFioSave = useCallback(() => {
+    if (fioSaveTimer.current) {
+      clearTimeout(fioSaveTimer.current);
+      fioSaveTimer.current = null;
+    }
+    void pushFioToGateway();
+  }, [pushFioToGateway]);
 
   return (
     <div className="min-h-screen w-full bg-[#dfe4ec] px-6 py-8 md:px-10">
-      <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-8">
+      <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-10">
         <MeetingHeader
           statusLabel={statusLabel}
           meetingId={meetingId}
@@ -111,12 +294,19 @@ export function InterviewShell() {
           prototypeEntryUrl={
             selectedRow && origin ? `${origin}${selectedRow.candidateEntryPath}` : undefined
           }
+          candidateFio={candidateFio}
+          onCandidateFioChange={(value) => {
+            userEditedFio.current = true;
+            setCandidateFio(value);
+          }}
+          onCandidateFioBlur={flushFioSave}
           onStart={() => {
             void start({
               triggerSource: "manual_debug_button",
               interviewId: selectedRow?.jobAiId,
               meetingAt: selectedRow?.meetingAt,
-              bypassMeetingAtGuard: true
+              bypassMeetingAtGuard: true,
+              interviewContext: interviewStartContext
             });
           }}
           onStop={() => {
@@ -131,18 +321,34 @@ export function InterviewShell() {
         {error ? (
           <p className="rounded-xl bg-rose-100 px-4 py-2 text-sm text-rose-700 shadow-sm">{error}</p>
         ) : null}
+        {rowsWarning ? (
+          <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 shadow-sm">
+            {rowsWarning}
+          </p>
+        ) : null}
+        {detailError && !selectedRow && !selectedInterviewDetail && !loadingRows ? (
+          <p className="rounded-xl border border-slate-200 bg-white/70 px-4 py-2 text-sm text-slate-700 shadow-sm">
+            Детали собеседования временно недоступны ({detailError}).
+          </p>
+        ) : null}
+        {fioSyncError ? (
+          <p className="rounded-xl border border-rose-200 bg-rose-50/90 px-4 py-2 text-sm text-rose-800 shadow-sm">
+            {fioSyncError}
+          </p>
+        ) : null}
 
-        <main className="mt-2 grid grid-cols-1 gap-8 lg:grid-cols-3">
+        <main className="mt-4 grid grid-cols-1 gap-8 lg:grid-cols-3 lg:items-stretch">
           <CandidateStreamCard
             meetingId={meetingId}
             sessionId={sessionId}
-            participantName="Мезенцев Денис Петрович"
+            participantName={candidateFio.trim() || "Кандидат"}
             interviewId={selectedRow?.jobAiId}
             meetingAt={selectedRow?.meetingAt}
+            interviewContext={interviewStartContext}
             onEnsureInterviewStart={start}
           />
           <AvatarStreamCard meetingId={meetingId} sessionId={sessionId} participantName="HR Avatar" />
-          <ParticipantCard roleLabel="Наблюдатель" participantName=" " placeholder />
+          <ParticipantCard roleLabel="Наблюдатель" participantName="Наблюдатель" placeholder />
         </main>
         <section className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-1">

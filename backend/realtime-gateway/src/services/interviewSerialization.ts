@@ -1,16 +1,17 @@
 import type { StoredInterview } from "../types/interview";
 import { applyInterviewTemplates } from "./templateInterpolation";
 
-function templateVars(interview: StoredInterview["rawPayload"]) {
+/** Подстановки: имя из проекции (учёт прототипного ФИО), вакансия/компания из сырого JobAI. */
+function templateVars(entry: StoredInterview) {
   return {
-    job_title: interview.jobTitle ?? "",
-    first_name: interview.candidateFirstName ?? "",
-    company_name: interview.companyName ?? ""
+    job_title: entry.rawPayload.jobTitle ?? "",
+    first_name: entry.projection.candidateFirstName ?? entry.rawPayload.candidateFirstName ?? "",
+    company_name: entry.rawPayload.companyName ?? ""
   };
 }
 
 export function serializeInterviewListItem(entry: StoredInterview): Record<string, unknown> {
-  const vars = templateVars(entry.rawPayload);
+  const vars = templateVars(entry);
   return {
     ...entry.projection,
     statusChangedAt: entry.rawPayload.statusChangedAt,
@@ -23,14 +24,16 @@ export function serializeInterviewListItem(entry: StoredInterview): Record<strin
 export function serializeInterviewDetail(entry: StoredInterview): {
   interview: Record<string, unknown>;
   projection: StoredInterview["projection"];
+  prototypeCandidate: StoredInterview["prototypeIdentity"] | null;
 } {
-  const vars = templateVars(entry.rawPayload);
+  const vars = templateVars(entry);
   return {
     interview: {
       ...entry.rawPayload,
       greetingSpeechResolved: applyInterviewTemplates(entry.rawPayload.greetingSpeech, vars),
       finalSpeechResolved: applyInterviewTemplates(entry.rawPayload.finalSpeech, vars)
     },
-    projection: entry.projection
+    projection: entry.projection,
+    prototypeCandidate: entry.prototypeIdentity ?? null
   };
 }

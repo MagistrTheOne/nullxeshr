@@ -1,5 +1,5 @@
 import { HttpError } from "../middleware/errorHandler";
-import type { InMemoryInterviewStore } from "./interviewStore";
+import { InMemoryInterviewStore, splitRuFullName } from "./interviewStore";
 import { JobAiClient } from "./jobaiClient";
 import { allowedJobAiTransitions, type JobAiInterview, type JobAiInterviewStatus, type StoredInterview } from "../types/interview";
 
@@ -92,6 +92,28 @@ export class InterviewSyncService {
     params: { meetingId: string; sessionId?: string; nullxesStatus?: "idle" | "in_meeting" | "completed" | "stopped_during_meeting" | "failed" }
   ): StoredInterview {
     return this.store.setRuntimeSession(jobAiId, params);
+  }
+
+  /**
+   * Прототип: сохранить ФИО кандидата в проекции gateway (raw JobAI не меняем).
+   * Разбор «Фамилия Имя Отчество»: первая лексема → candidateLastName, остальное → candidateFirstName.
+   */
+  setPrototypeCandidateFio(jobAiId: number, fullName: string): StoredInterview {
+    const existing = this.store.getByJobAiId(jobAiId);
+    if (!existing) {
+      throw new HttpError(404, "Interview not found");
+    }
+    const trimmed = fullName.trim();
+    if (!trimmed) {
+      return this.store.clearPrototypeIdentity(jobAiId);
+    }
+    const { candidateFirstName, candidateLastName } = splitRuFullName(trimmed);
+    return this.store.setPrototypeIdentity(jobAiId, {
+      candidateFirstName,
+      candidateLastName,
+      sourceFullName: trimmed,
+      updatedAt: new Date().toISOString()
+    });
   }
 
   getEntryPaths(jobAiId: number): { candidateEntryPath: string; spectatorEntryPath: string } {

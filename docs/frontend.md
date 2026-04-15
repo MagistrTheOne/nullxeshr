@@ -5,11 +5,11 @@ Next.js 16 приложение в каталоге [frontend/jobaidemo](../fron
 ## Что сделано
 
 - Экран интервью: шапка, три колонки (кандидат Stream, HR avatar Stream, наблюдатель-заглушка), блок JobAI source, скрипт аватара, таблица собеседований.
-- **Авторизация прототипа**: middleware + форма `/login` + cookie-сессия; опционально вход по заголовку `Authorization: Basic` (для curl/прокси).
+- **Авторизация прототипа**: Next.js `proxy.ts` + форма `/login` + cookie-сессия; опционально вход по заголовку `Authorization: Basic` (для curl/прокси).
 - **API-клиент** к своему бэкенду через Next Route Handler `GET/POST/PUT/PATCH/DELETE /api/gateway/*` → `BACKEND_GATEWAY_URL` (по умолчанию `http://localhost:8080`).
-- **Таблица интервью**: колонки ID Nullxes / JobAI, имя и фамилия отдельно, компания, `meetingAt`, бизнес-статус Nullxes (лейбл с бэка), сырой статус JobAI; кнопки «Справочно» (модалка: вакансия, приветствие/прощание с подстановками с бэка, вопросы specialty), копирование ссылок на **вход в прототип** (без Zoom): `/?jobAiId=…` и `/spectator?jobAiId=…`, открытие наблюдателя в новой вкладке.
+- **Таблица интервью**: колонки ID Nullxes / JobAI, имя и фамилия отдельно, компания, `meetingAt`, бизнес-статус Nullxes (лейбл с бэка), сырой статус JobAI; кнопки «Справочно» (модалка: вакансия, приветствие/прощание с подстановками с бэка, вопросы specialty), копирование ссылок на **вход в прототип**: `/?jobAiId=…` и `/spectator?jobAiId=…`, открытие наблюдателя в новой вкладке.
 - **Deep link**: query `?jobAiId=<number>` на главной выделяет строку и подгружает детали.
-- **Страница** `/spectator`: заглушка с пояснением (Stream + meetingId на главной), без Zoom.
+- **Страница** `/spectator`: заглушка с пояснением (Stream + `meetingId` на главной).
 
 ## Модули и файлы
 
@@ -47,7 +47,7 @@ Next.js 16 приложение в каталоге [frontend/jobaidemo](../fron
 flowchart LR
   subgraph browser [Browser]
     UI[InterviewShell_Table]
-    MW[middleware]
+    MW[proxy]
   end
   subgraph next [Next_jobaidemo]
     GWProxy["/api/gateway/*"]
@@ -94,7 +94,7 @@ flowchart LR
 | `PROTOTYPE_BASIC_USER` / `PROTOTYPE_BASIC_PASSWORD` | Одна пара, если не используется multi |
 | `PROTOTYPE_SESSION_SECRET` | Минимум 16 символов; подпись cookie (обязательно, если включена защита) |
 
-Если не заданы учётки **или** секрет — middleware **не** блокирует (удобно для локальной разработки).
+Если не заданы учётки **или** секрет — прокси **не** блокирует (удобно для локальной разработки).
 
 ## Связанный документ
 

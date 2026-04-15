@@ -51,10 +51,19 @@ export interface JobAiInterview {
   finalSpeech?: string;
 }
 
+/** Ввод ФИО из прототипа UI: хранится отдельно от webhook/raw JobAI (1:1 raw не трогаем). */
+export interface PrototypeCandidateIdentity {
+  candidateFirstName: string;
+  candidateLastName: string;
+  sourceFullName: string;
+  updatedAt: string;
+}
+
 export interface StoredInterview {
   jobAiId: number;
   rawPayload: JobAiInterview;
   projection: InterviewProjection;
+  prototypeIdentity?: PrototypeCandidateIdentity;
 }
 
 export interface InterviewProjection {

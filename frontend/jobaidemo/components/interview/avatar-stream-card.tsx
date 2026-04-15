@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { CallingState, SpeakerLayout, StreamCall, StreamTheme, StreamVideo, StreamVideoClient, useCallStateHooks } from "@stream-io/video-react-sdk";
 import { sendRealtimeEvent } from "@/lib/api";
+import { StreamParticipantShell } from "@/components/interview/stream-participant-shell";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 
 type StreamTokenResponse = {
   apiKey: string;
@@ -108,31 +108,36 @@ export function AvatarStreamCard({ meetingId, sessionId, participantName }: Avat
   }, [meetingId, sessionId]);
 
   return (
-    <section className="flex w-full flex-col items-center gap-4">
-      <h3 className="text-[30px] font-medium text-slate-600">HR аватар</h3>
-      <Card className="w-full rounded-2xl border-0 bg-[#d9dee7] p-3 shadow-[-8px_-8px_16px_rgba(255,255,255,.9),8px_8px_18px_rgba(163,177,198,.55)]">
-        <CardContent className="space-y-3 p-2">
-          <div className="h-[260px] overflow-hidden rounded-xl border border-white/50 bg-[#d0d6e0]">
-            {client && call ? (
-              <StreamVideo client={client}>
-                <StreamTheme>
-                  <StreamCall call={call}>
-                    <AvatarCallBody />
-                  </StreamCall>
-                </StreamTheme>
-              </StreamVideo>
-            ) : (
-              <div className="flex h-full items-center justify-center text-sm text-slate-400">HR avatar standby</div>
-            )}
-          </div>
-
+    <StreamParticipantShell
+      title="HR аватар"
+      footer={
+        <>
           <div className="flex items-center justify-between gap-2">
-            <p className="truncate text-sm text-slate-600">{participantName}</p>
-            <Badge variant="secondary">{call ? "Connected" : "Idle"}</Badge>
+            <p className="min-h-5 truncate text-sm leading-snug text-slate-600">{participantName}</p>
+            <Badge variant="secondary" className="shrink-0">
+              {call ? "Connected" : "Idle"}
+            </Badge>
           </div>
-        </CardContent>
-      </Card>
-      {error ? <p className="w-full rounded-lg bg-rose-100 px-3 py-2 text-sm text-rose-700">{error}</p> : null}
-    </section>
+          <p className="text-xs leading-relaxed text-slate-400">
+            Один Stream call с кандидатом: общий <code className="rounded bg-white/40 px-1">meetingId</code>.
+          </p>
+        </>
+      }
+      error={error ? <p className="w-full rounded-lg bg-rose-100 px-3 py-2 text-sm text-rose-700">{error}</p> : null}
+    >
+      {client && call ? (
+        <div className="h-full w-full">
+          <StreamVideo client={client}>
+            <StreamTheme>
+              <StreamCall call={call}>
+                <AvatarCallBody />
+              </StreamCall>
+            </StreamTheme>
+          </StreamVideo>
+        </div>
+      ) : (
+        <div className="flex h-full items-center justify-center text-sm text-slate-400">Ожидание подключения HR-аватара</div>
+      )}
+    </StreamParticipantShell>
   );
 }

@@ -1,5 +1,22 @@
-import type { InterviewProjection, JobAiInterview, JobAiInterviewStatus, StoredInterview } from "../types/interview";
+import type {
+  InterviewProjection,
+  JobAiInterview,
+  JobAiInterviewStatus,
+  PrototypeCandidateIdentity,
+  StoredInterview
+} from "../types/interview";
 import { resolveNullxesBusiness } from "./nullxesBusinessStatus";
+
+export function splitRuFullName(fullName: string): { candidateLastName: string; candidateFirstName: string } {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) {
+    return { candidateLastName: "", candidateFirstName: "" };
+  }
+  if (parts.length === 1) {
+    return { candidateLastName: parts[0], candidateFirstName: "" };
+  }
+  return { candidateLastName: parts[0], candidateFirstName: parts.slice(1).join(" ") };
+}
 
 export class InMemoryInterviewStore {
   private readonly byJobAiId = new Map<number, StoredInterview>();
@@ -28,10 +45,17 @@ export class InMemoryInterviewStore {
       updatedAt: new Date().toISOString()
     };
 
+    const prototypeIdentity = existing?.prototypeIdentity;
+    if (prototypeIdentity) {
+      projection.candidateFirstName = prototypeIdentity.candidateFirstName;
+      projection.candidateLastName = prototypeIdentity.candidateLastName;
+    }
+
     const stored: StoredInterview = {
       jobAiId: rawPayload.id,
       rawPayload,
-      projection
+      projection,
+      prototypeIdentity
     };
     this.byJobAiId.set(rawPayload.id, stored);
     return stored;
@@ -49,6 +73,30 @@ export class InMemoryInterviewStore {
       interviews: all.slice(skip, skip + take),
       count: all.length
     };
+  }
+
+  setPrototypeIdentity(jobAiId: number, identity: PrototypeCandidateIdentity): StoredInterview {
+    const existing = this.byJobAiId.get(jobAiId);
+    if (!existing) {
+      throw new Error(`Interview not found: ${jobAiId}`);
+    }
+    existing.prototypeIdentity = identity;
+    existing.projection.candidateFirstName = identity.candidateFirstName;
+    existing.projection.candidateLastName = identity.candidateLastName;
+    existing.projection.updatedAt = new Date().toISOString();
+    return existing;
+  }
+
+  clearPrototypeIdentity(jobAiId: number): StoredInterview {
+    const existing = this.byJobAiId.get(jobAiId);
+    if (!existing) {
+      throw new Error(`Interview not found: ${jobAiId}`);
+    }
+    delete existing.prototypeIdentity;
+    existing.projection.candidateFirstName = existing.rawPayload.candidateFirstName ?? "";
+    existing.projection.candidateLastName = existing.rawPayload.candidateLastName ?? "";
+    existing.projection.updatedAt = new Date().toISOString();
+    return existing;
   }
 
   setRuntimeSession(

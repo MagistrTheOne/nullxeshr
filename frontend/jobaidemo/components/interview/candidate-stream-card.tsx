@@ -14,9 +14,9 @@ import {
 } from "@stream-io/video-react-sdk";
 import { Maximize, Mic, Minimize, Video } from "lucide-react";
 import { sendRealtimeEvent } from "@/lib/api";
-import type { InterviewStartResult } from "@/hooks/use-interview-session";
+import type { InterviewStartContext, InterviewStartResult } from "@/hooks/use-interview-session";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { StreamParticipantShell } from "@/components/interview/stream-participant-shell";
 
 type StreamTokenResponse = {
   apiKey: string;
@@ -51,7 +51,9 @@ type CandidateStreamCardProps = {
     interviewId?: number;
     meetingAt?: string;
     bypassMeetingAtGuard?: boolean;
+    interviewContext?: InterviewStartContext;
   }) => Promise<InterviewStartResult>;
+  interviewContext?: InterviewStartContext;
 };
 
 export function CandidateStreamCard({
@@ -60,7 +62,8 @@ export function CandidateStreamCard({
   participantName,
   interviewId,
   meetingAt,
-  onEnsureInterviewStart
+  onEnsureInterviewStart,
+  interviewContext
 }: CandidateStreamCardProps) {
   const [client, setClient] = useState<StreamVideoClient | null>(null);
   const [call, setCall] = useState<ReturnType<StreamVideoClient["call"]> | null>(null);
@@ -86,7 +89,8 @@ export function CandidateStreamCard({
         const started = await onEnsureInterviewStart({
           triggerSource: "join_stream",
           interviewId,
-          meetingAt
+          meetingAt,
+          interviewContext
         });
         effectiveMeetingId = started.meetingId;
         effectiveSessionId = started.sessionId;
@@ -216,27 +220,14 @@ export function CandidateStreamCard({
   };
 
   return (
-    <section className="flex w-full flex-col items-center gap-4">
-      <h3 className="text-[30px] font-medium text-slate-600">Кандидат</h3>
-      <Card className="w-full rounded-2xl border-0 bg-[#d9dee7] p-3 shadow-[-8px_-8px_16px_rgba(255,255,255,.9),8px_8px_18px_rgba(163,177,198,.55)]">
-        <CardContent className="space-y-3 p-2">
-          <div ref={streamViewportRef} className="h-[260px] overflow-hidden rounded-xl border border-white/50 bg-[#d0d6e0]">
-            {client && call ? (
-              <StreamVideo client={client}>
-                <StreamTheme>
-                  <StreamCall call={call}>
-                    <CandidateCallBody layout={layout} />
-                  </StreamCall>
-                </StreamTheme>
-              </StreamVideo>
-            ) : (
-              <div className="flex h-full items-center justify-center text-sm text-slate-400">Нажмите Join Stream</div>
-            )}
-          </div>
-
+    <StreamParticipantShell
+      title="Кандидат"
+      videoRef={streamViewportRef}
+      footer={
+        <>
           <div className="flex items-center justify-between gap-2 text-slate-600">
-            <p className="truncate text-sm">{participantName}</p>
-            <div className="flex items-center gap-2">
+            <p className="min-h-5 truncate text-sm leading-snug">{participantName}</p>
+            <div className="flex shrink-0 items-center gap-2">
               <Button
                 type="button"
                 size="icon"
@@ -296,13 +287,27 @@ export function CandidateStreamCard({
           </div>
 
           {showDevices && call ? (
-            <div className="rounded-lg border border-white/60 bg-white/60 p-2">
+            <div className="max-h-[100px] overflow-y-auto rounded-lg border border-white/60 bg-white/60 p-2">
               <DeviceSettings />
             </div>
           ) : null}
-        </CardContent>
-      </Card>
-      {error ? <p className="w-full rounded-lg bg-rose-100 px-3 py-2 text-sm text-rose-700">{error}</p> : null}
-    </section>
+        </>
+      }
+      error={error ? <p className="w-full rounded-lg bg-rose-100 px-3 py-2 text-sm text-rose-700">{error}</p> : null}
+    >
+      {client && call ? (
+        <div className="h-full w-full">
+          <StreamVideo client={client}>
+            <StreamTheme>
+              <StreamCall call={call}>
+                <CandidateCallBody layout={layout} />
+              </StreamCall>
+            </StreamTheme>
+          </StreamVideo>
+        </div>
+      ) : (
+        <div className="flex h-full items-center justify-center text-sm text-slate-400">Нажмите &quot;Join Stream&quot; для входа</div>
+      )}
+    </StreamParticipantShell>
   );
 }

@@ -17,11 +17,24 @@ export type InterviewStartResult = {
   sessionId: string;
 };
 
+export type InterviewStartContext = {
+  candidateFirstName?: string;
+  candidateLastName?: string;
+  candidateFullName?: string;
+  jobTitle?: string;
+  vacancyText?: string;
+  companyName?: string;
+  greetingSpeech?: string;
+  finalSpeech?: string;
+  questions?: Array<{ text: string; order: number }>;
+};
+
 type StartOptions = {
   triggerSource?: string;
   interviewId?: number;
   meetingAt?: string;
   bypassMeetingAtGuard?: boolean;
+  interviewContext?: InterviewStartContext;
 };
 
 export function useInterviewSession() {
@@ -71,7 +84,8 @@ export function useInterviewSession() {
         triggerSource,
         metadata: {
           source: "jobaidemo",
-          jobAiInterviewId: options?.interviewId
+          jobAiInterviewId: options?.interviewId,
+          interviewContext: options?.interviewContext
         }
       });
       setMeetingId(internalMeetingId);

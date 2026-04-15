@@ -65,6 +65,13 @@ export type InterviewListRow = {
   finalSpeechResolved?: string;
 };
 
+export type PrototypeCandidatePayload = {
+  candidateFirstName: string;
+  candidateLastName: string;
+  sourceFullName: string;
+  updatedAt: string;
+};
+
 export type InterviewDetail = {
   interview: Record<string, unknown> & {
     id: number;
@@ -86,6 +93,8 @@ export type InterviewDetail = {
     };
   };
   projection: InterviewListRow;
+  /** ФИО из прототипа, сохранённые на gateway (raw JobAI не меняются). */
+  prototypeCandidate?: PrototypeCandidatePayload | null;
 };
 
 export type JobAiSourceStatus = {
@@ -200,6 +209,14 @@ export async function listInterviews(params?: { skip?: number; take?: number; sy
 export async function getInterviewById(id: number, sync = false): Promise<InterviewDetail> {
   const suffix = sync ? "?sync=1" : "";
   return requestJson<InterviewDetail>(`interviews/${id}${suffix}`, { method: "GET" });
+}
+
+/** Сохранить ФИО кандидата в проекции gateway (разбор: первая лексема → фамилия, остальное → имя+отчество). */
+export async function savePrototypeCandidateFio(jobAiId: number, fullName: string): Promise<InterviewDetail> {
+  return requestJson<InterviewDetail>(`interviews/${jobAiId}/prototype-candidate-fio`, {
+    method: "POST",
+    body: JSON.stringify({ fullName })
+  });
 }
 
 export async function linkInterviewSession(input: {
