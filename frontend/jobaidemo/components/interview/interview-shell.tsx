@@ -65,7 +65,19 @@ export function InterviewShell() {
     const id = Number(raw);
     return Number.isInteger(id) && id > 0 ? id : null;
   }, [searchParams]);
-  const { start, stop, markFailed, meetingId, sessionId, avatarReady, statusLabel, phase, error, remoteAudioStream } =
+  const {
+    start,
+    stop,
+    markFailed,
+    meetingId,
+    sessionId,
+    avatarReady,
+    lastAgentContextTrace,
+    statusLabel,
+    phase,
+    error,
+    remoteAudioStream
+  } =
     useInterviewSession();
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [origin, setOrigin] = useState("");
@@ -155,29 +167,40 @@ export function InterviewShell() {
     [rows, selectedInterviewId]
   );
 
+  const selectedInterviewDetailMatched = useMemo(() => {
+    if (!selectedInterviewDetail || !selectedInterviewId) {
+      return null;
+    }
+    return selectedInterviewDetail.interview.id === selectedInterviewId ? selectedInterviewDetail : null;
+  }, [selectedInterviewDetail, selectedInterviewId]);
+
   const interviewStartContext = useMemo<InterviewStartContext | undefined>(() => {
-    if (!selectedRow && !selectedInterviewDetail) {
+    if (!selectedRow && !selectedInterviewDetailMatched) {
       return undefined;
     }
-    const first = candidateFio.trim() || selectedRow?.candidateFirstName || selectedInterviewDetail?.interview.candidateFirstName || "";
-    const last = selectedRow?.candidateLastName || selectedInterviewDetail?.interview.candidateLastName || "";
+    const first =
+      candidateFio.trim() ||
+      selectedRow?.candidateFirstName ||
+      selectedInterviewDetailMatched?.interview.candidateFirstName ||
+      "";
+    const last = selectedRow?.candidateLastName || selectedInterviewDetailMatched?.interview.candidateLastName || "";
     const full = candidateFio.trim() || [first, last].filter(Boolean).join(" ").trim();
     return {
       candidateFirstName: first || undefined,
       candidateLastName: last || undefined,
       candidateFullName: full || undefined,
-      jobTitle: selectedInterviewDetail?.interview.jobTitle,
-      vacancyText: selectedInterviewDetail?.interview.vacancyText,
-      companyName: selectedRow?.companyName || selectedInterviewDetail?.interview.companyName,
+      jobTitle: selectedInterviewDetailMatched?.interview.jobTitle,
+      vacancyText: selectedInterviewDetailMatched?.interview.vacancyText,
+      companyName: selectedRow?.companyName || selectedInterviewDetailMatched?.interview.companyName,
       greetingSpeech:
-        (selectedInterviewDetail?.interview.greetingSpeechResolved as string | undefined) ??
-        selectedInterviewDetail?.interview.greetingSpeech,
+        (selectedInterviewDetailMatched?.interview.greetingSpeechResolved as string | undefined) ??
+        selectedInterviewDetailMatched?.interview.greetingSpeech,
       finalSpeech:
-        (selectedInterviewDetail?.interview.finalSpeechResolved as string | undefined) ??
-        selectedInterviewDetail?.interview.finalSpeech,
-      questions: selectedInterviewDetail?.interview.specialty?.questions
+        (selectedInterviewDetailMatched?.interview.finalSpeechResolved as string | undefined) ??
+        selectedInterviewDetailMatched?.interview.finalSpeech,
+      questions: selectedInterviewDetailMatched?.interview.specialty?.questions
     };
-  }, [candidateFio, selectedInterviewDetail, selectedRow]);
+  }, [candidateFio, selectedInterviewDetailMatched, selectedRow]);
 
   const contextReadiness = useMemo(() => {
     const candidateReady = Boolean(
@@ -298,19 +321,16 @@ export function InterviewShell() {
   }, [loadInterviewDetail, rows, selectedInterviewId]);
 
   useEffect(() => {
-    if (!selectedInterviewId || !selectedInterviewDetail) {
-      return;
-    }
-    if (selectedInterviewDetail.interview.id !== selectedInterviewId) {
+    if (!selectedInterviewId || !selectedInterviewDetailMatched) {
       return;
     }
     if (hydratedServerFioFor.current === selectedInterviewId) {
       return;
     }
-    const serverFio = selectedInterviewDetail.prototypeCandidate?.sourceFullName?.trim();
+    const serverFio = selectedInterviewDetailMatched.prototypeCandidate?.sourceFullName?.trim();
     const fallbackFromInterview = [
-      selectedInterviewDetail.interview.candidateFirstName?.trim(),
-      selectedInterviewDetail.interview.candidateLastName?.trim()
+      selectedInterviewDetailMatched.interview.candidateFirstName?.trim(),
+      selectedInterviewDetailMatched.interview.candidateLastName?.trim()
     ]
       .filter(Boolean)
       .join(" ")
@@ -327,7 +347,7 @@ export function InterviewShell() {
       }
     }
     hydratedServerFioFor.current = selectedInterviewId;
-  }, [selectedInterviewId, selectedInterviewDetail]);
+  }, [selectedInterviewId, selectedInterviewDetailMatched]);
 
   const pushFioToGateway = useCallback(async () => {
     const id = selectedInterviewId;
@@ -413,7 +433,10 @@ export function InterviewShell() {
               const activeInterviewId = selectedRow?.jobAiId;
               if (
                 activeInterviewId &&
-                (!contextForStart?.jobTitle || !contextForStart?.companyName || (contextForStart.questions?.length ?? 0) === 0)
+                (!selectedInterviewDetailMatched ||
+                  !contextForStart?.jobTitle ||
+                  !contextForStart?.companyName ||
+                  (contextForStart.questions?.length ?? 0) === 0)
               ) {
                 try {
                   const syncedDetail = await getInterviewById(activeInterviewId, true);
@@ -479,7 +502,7 @@ export function InterviewShell() {
             {fioSyncError}
           </p>
         ) : null}
-        <section className="grid gap-3 md:grid-cols-2">
+        <section className="grid gap-3 md:grid-cols-3">
           <div className="rounded-xl border border-slate-200 bg-white/70 px-4 py-3 text-sm text-slate-700 shadow-sm">
             <p className="font-medium text-slate-800">Сигнал HR-аватара</p>
             <p className="mt-1">
@@ -496,6 +519,18 @@ export function InterviewShell() {
               {contextReadiness.companyReady ? "✅" : "⬜"} Компания{" · "}
               {contextReadiness.questionsReady ? "✅" : "⬜"} Вопросы ({contextReadiness.questionsCount})
             </p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white/70 px-4 py-3 text-sm text-slate-700 shadow-sm">
+            <p className="font-medium text-slate-800">Debug: отправлено в агента</p>
+            {lastAgentContextTrace ? (
+              <p className="mt-1">
+                session: <code className="rounded bg-white/60 px-1">{lastAgentContextTrace.sessionId}</code>
+                {" · "}jobAiId: <code className="rounded bg-white/60 px-1">{lastAgentContextTrace.interviewId ?? "—"}</code>
+                {" · "}job: <code className="rounded bg-white/60 px-1">{lastAgentContextTrace.jobTitle ?? "—"}</code>
+              </p>
+            ) : (
+              <p className="mt-1 text-slate-500">Пока нет отправленного контекста (запустите Start Session).</p>
+            )}
           </div>
         </section>
 
@@ -525,16 +560,16 @@ export function InterviewShell() {
           </div>
           <div className="lg:col-span-2">
             <AvatarScriptCard
-              title={selectedInterviewDetail?.interview.jobTitle}
+              title={selectedInterviewDetailMatched?.interview.jobTitle}
               greetingSpeech={
-                (selectedInterviewDetail?.interview.greetingSpeechResolved as string | undefined) ??
-                selectedInterviewDetail?.interview.greetingSpeech
+                (selectedInterviewDetailMatched?.interview.greetingSpeechResolved as string | undefined) ??
+                selectedInterviewDetailMatched?.interview.greetingSpeech
               }
               finalSpeech={
-                (selectedInterviewDetail?.interview.finalSpeechResolved as string | undefined) ??
-                selectedInterviewDetail?.interview.finalSpeech
+                (selectedInterviewDetailMatched?.interview.finalSpeechResolved as string | undefined) ??
+                selectedInterviewDetailMatched?.interview.finalSpeech
               }
-              questions={selectedInterviewDetail?.interview.specialty?.questions}
+              questions={selectedInterviewDetailMatched?.interview.specialty?.questions}
             />
           </div>
         </section>

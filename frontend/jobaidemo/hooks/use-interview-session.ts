@@ -32,6 +32,17 @@ export type InterviewStartContext = {
   questions?: Array<{ text: string; order: number }>;
 };
 
+export type AgentContextTrace = {
+  sentAt: string;
+  interviewId?: number;
+  meetingId: string;
+  sessionId: string;
+  candidateFullName?: string;
+  companyName?: string;
+  jobTitle?: string;
+  questionsCount: number;
+};
+
 type StartOptions = {
   triggerSource?: string;
   interviewId?: number;
@@ -73,6 +84,7 @@ function buildInterviewInstructions(context?: InterviewStartContext): string {
   return [
     "Ты HR-аватар для технического интервью.",
     "Используй только контекст интервью ниже, не придумывай новые факты и не меняй компанию/должность/имя кандидата.",
+    "Если кандидат спрашивает «по какому собеседованию мы проводимся?», отвечай строго из этого контекста: должность + компания + имя кандидата.",
     `Кандидат: ${candidateFullName}`,
     `Компания: ${company}`,
     `Должность: ${jobTitle}`,
@@ -82,6 +94,19 @@ function buildInterviewInstructions(context?: InterviewStartContext): string {
     `Финальная фраза (использовать дословно в конце): ${finalSpeech}`,
     "Начни с приветствия и обязательно спроси: «Вы готовы пройти интервью?»"
   ].join("\n\n");
+}
+
+function buildOpeningUtterance(context?: InterviewStartContext): string {
+  const candidateFullName =
+    context?.candidateFullName?.trim() ||
+    [context?.candidateFirstName?.trim(), context?.candidateLastName?.trim()].filter(Boolean).join(" ").trim() ||
+    "кандидат";
+  const company = context?.companyName?.trim() || "компания не указана";
+  const jobTitle = context?.jobTitle?.trim() || "должность не указана";
+  const greeting =
+    context?.greetingSpeech?.trim() ||
+    `Здравствуйте, ${candidateFullName}, это собеседование по вакансии ${jobTitle} в компанию ${company}.`;
+  return `${greeting} Вы готовы пройти интервью?`;
 }
 
 async function transitionJobAiToInMeeting(interviewId: number): Promise<void> {
@@ -134,6 +159,7 @@ export function useInterviewSession() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [avatarReady, setAvatarReady] = useState(false);
+  const [lastAgentContextTrace, setLastAgentContextTrace] = useState<AgentContextTrace | null>(null);
   const [rtcState, setRtcState] = useState<WebRtcConnectionState>("idle");
   const [remoteAudioStream, setRemoteAudioStream] = useState<MediaStream | null>(null);
 
@@ -246,23 +272,46 @@ export function useInterviewSession() {
       }
 
       const runtimeInstructions = buildInterviewInstructions(options?.interviewContext);
+      setLastAgentContextTrace({
+        sentAt: new Date().toISOString(),
+        interviewId: options?.interviewId,
+        meetingId: internalMeetingId,
+        sessionId: connected.sessionId,
+        candidateFullName:
+          options?.interviewContext?.candidateFullName ||
+          [options?.interviewContext?.candidateFirstName, options?.interviewContext?.candidateLastName]
+            .filter(Boolean)
+            .join(" ")
+            .trim(),
+        companyName: options?.interviewContext?.companyName,
+        jobTitle: options?.interviewContext?.jobTitle,
+        questionsCount: options?.interviewContext?.questions?.length ?? 0
+      });
       await rtc.postEvent({
         type: "session.update",
         session: {
           instructions: runtimeInstructions
         }
       });
+      const openingUtterance = buildOpeningUtterance(options?.interviewContext);
       await rtc.postEvent({
         type: "conversation.item.create",
-        source: "frontend",
-        message: "session_started"
+        item: {
+          type: "message",
+          role: "user",
+          content: [
+            {
+              type: "input_text",
+              text: `Старт интервью. Произнеси в начале дословно: "${openingUtterance}". Затем дождись ответа кандидата.`
+            }
+          ]
+        }
       });
       await rtc.postEvent({
         type: "response.create",
         response: {
           modalities: ["audio", "text"],
-          instructions:
-            "Сейчас начни интервью: произнеси приветствие из контекста, представь компанию/вакансию и спроси кандидата «Вы готовы пройти интервью?»"
+          instructions: `Сейчас начни интервью и скажи дословно: "${openingUtterance}". Не упоминай другие вакансии, компании или роли.`
         }
       });
 
@@ -333,6 +382,7 @@ export function useInterviewSession() {
       }
       setMeetingId(null);
       setSessionId(null);
+      setAvatarReady(false);
       setPhase("idle");
     } catch (err) {
       setPhase("failed");
@@ -365,6 +415,7 @@ export function useInterviewSession() {
     meetingId,
     sessionId,
     avatarReady,
+    lastAgentContextTrace,
     rtcState,
     error,
     remoteAudioStream,

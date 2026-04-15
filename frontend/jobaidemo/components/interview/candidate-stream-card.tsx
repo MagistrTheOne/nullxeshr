@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CallingState,
   DeviceSettings,
@@ -79,6 +79,7 @@ export function CandidateStreamCard({
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const streamViewportRef = useRef<HTMLDivElement | null>(null);
+  const autoJoinAttemptForRef = useRef<string | null>(null);
 
   const callRoomId = useMemo(() => meetingId ?? "demo-call", [meetingId]);
 
@@ -86,7 +87,7 @@ export function CandidateStreamCard({
     onSharedCallChange?.({ client, call });
   }, [call, client, onSharedCallChange]);
 
-  const startStream = async () => {
+  const startStream = useCallback(async () => {
     setBusy(true);
     setError(null);
     try {
@@ -147,7 +148,19 @@ export function CandidateStreamCard({
     } finally {
       setBusy(false);
     }
-  };
+  }, [interviewContext, interviewId, meetingAt, meetingId, onEnsureInterviewStart, participantName, sessionId]);
+
+  useEffect(() => {
+    if (!meetingId || !sessionId || call || busy) {
+      return;
+    }
+    const autoJoinKey = `${meetingId}:${sessionId}`;
+    if (autoJoinAttemptForRef.current === autoJoinKey) {
+      return;
+    }
+    autoJoinAttemptForRef.current = autoJoinKey;
+    void startStream();
+  }, [busy, call, meetingId, sessionId, startStream]);
 
   const leaveStream = async () => {
     setBusy(true);
