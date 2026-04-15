@@ -273,25 +273,28 @@ function SpectatorBody() {
   }, [call, client]);
 
   return (
-    <div className="min-h-screen bg-[#dfe4ec] px-6 py-10">
+    <div className="min-h-screen bg-[#dfe4ec] px-4 py-6 sm:px-6 sm:py-10">
       <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6">
-        <div className="rounded-2xl border border-white/60 bg-white/70 px-5 py-4 shadow-sm">
+        <div className="rounded-2xl border border-white/60 bg-white/70 px-4 py-3 shadow-sm sm:px-5 sm:py-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="space-y-1 text-sm text-slate-700">
               <p className="text-base font-semibold text-slate-800">Режим наблюдателя</p>
-              <p>
-                JobAI ID: <code className="rounded bg-white/70 px-1">{jobAiId ?? "—"}</code>
-                {" · "}Meeting: <code className="rounded bg-white/70 px-1">{meetingId ?? "ожидаем Start Session"}</code>
-                {" · "}Session: <code className="rounded bg-white/70 px-1">{sessionId ?? "ожидаем Start Session"}</code>
+              <p className="wrap-break-word text-xs sm:text-sm">
+                JobAI ID: <code className="break-all rounded bg-white/70 px-1">{jobAiId ?? "—"}</code>
+                {" · "}Meeting:{" "}
+                <code className="break-all rounded bg-white/70 px-1">{meetingId ?? "ожидаем Start Session"}</code>
+                {" · "}Session:{" "}
+                <code className="break-all rounded bg-white/70 px-1">{sessionId ?? "ожидаем Start Session"}</code>
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
               <Badge variant="secondary">{call ? "Connected" : loading ? "Loading" : "Idle"}</Badge>
               <Badge variant="secondary">{observerVisible ? "Observer visible" : "Observer hidden"}</Badge>
               <Badge variant="secondary">{observerTalkAllowed ? "Talk enabled" : "Talk disabled"}</Badge>
               <Button
                 type="button"
                 variant="secondary"
+                className="w-full sm:w-auto"
                 onClick={() => {
                   router.push(jobAiId ? `/?jobAiId=${encodeURIComponent(jobAiId)}` : "/");
                 }}
@@ -314,15 +317,21 @@ function SpectatorBody() {
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {!call ? (
-                    <Button size="sm" onClick={startSpectatorStream} disabled={busy || !meetingId}>
+                    <Button size="sm" className="w-full sm:w-auto" onClick={startSpectatorStream} disabled={busy || !meetingId}>
                       Join Spectator
                     </Button>
                   ) : (
-                    <Button size="sm" variant="destructive" onClick={leaveStream} disabled={busy}>
+                    <Button size="sm" variant="destructive" className="w-full sm:w-auto" onClick={leaveStream} disabled={busy}>
                       Leave
                     </Button>
                   )}
-                  <Button size="sm" variant="secondary" onClick={() => void loadInterviewDetail()} disabled={loading}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="w-full sm:w-auto"
+                    onClick={() => void loadInterviewDetail()}
+                    disabled={loading}
+                  >
                     Обновить статус
                   </Button>
                   <Button
@@ -390,7 +399,7 @@ function SpectatorBody() {
           </StreamParticipantShell>
         </div>
 
-        <div className="rounded-2xl border border-white/60 bg-white/70 p-5 text-sm text-slate-700 shadow-sm">
+        <div className="rounded-2xl border border-white/60 bg-white/70 p-4 text-sm text-slate-700 shadow-sm sm:p-5">
           <p className="font-medium text-slate-800">Статус интервью</p>
           <div className="mt-3 space-y-2">
             <p>

@@ -479,7 +479,7 @@ export function InterviewShell() {
   }, [observerControl.talk, observerControl.visibility, phase, sessionId]);
 
   return (
-    <div className="min-h-screen w-full bg-[#dfe4ec] px-6 py-8 md:px-10">
+    <div className="min-h-screen w-full bg-[#dfe4ec] px-4 py-6 sm:px-6 sm:py-8 md:px-10">
       <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-10">
         <MeetingHeader
           statusLabel={statusLabel}
@@ -605,10 +605,11 @@ export function InterviewShell() {
           <div className="rounded-xl border border-slate-200 bg-white/70 px-4 py-3 text-sm text-slate-700 shadow-sm">
             <p className="font-medium text-slate-800">Debug: отправлено в агента</p>
             {lastAgentContextTrace ? (
-              <p className="mt-1">
-                session: <code className="rounded bg-white/60 px-1">{lastAgentContextTrace.sessionId}</code>
-                {" · "}jobAiId: <code className="rounded bg-white/60 px-1">{lastAgentContextTrace.interviewId ?? "—"}</code>
-                {" · "}job: <code className="rounded bg-white/60 px-1">{lastAgentContextTrace.jobTitle ?? "—"}</code>
+              <p className="mt-1 wrap-break-word text-xs sm:text-sm">
+                session: <code className="break-all rounded bg-white/60 px-1">{lastAgentContextTrace.sessionId}</code>
+                {" · "}jobAiId:{" "}
+                <code className="break-all rounded bg-white/60 px-1">{lastAgentContextTrace.interviewId ?? "—"}</code>
+                {" · "}job: <code className="wrap-break-word rounded bg-white/60 px-1">{lastAgentContextTrace.jobTitle ?? "—"}</code>
               </p>
             ) : (
               <p className="mt-1 text-slate-500">Пока нет отправленного контекста (запустите Start Session).</p>
@@ -619,7 +620,7 @@ export function InterviewShell() {
           <div className="rounded-xl border border-slate-200 bg-white/70 px-4 py-3 text-sm text-slate-700 shadow-sm">
             <p className="font-medium text-slate-800">Observer visibility</p>
             <p className="mt-1">{observerVisible ? "visible" : "hidden (default)"}</p>
-            <div className="mt-2 flex gap-2">
+            <div className="mt-2 flex flex-wrap gap-2">
               <button
                 type="button"
                 className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
@@ -641,7 +642,7 @@ export function InterviewShell() {
             <p className="mt-1">
               {observerVisible ? (observerTalkActive ? "on" : "off") : "off (observer hidden)"}
             </p>
-            <div className="mt-2 flex gap-2">
+            <div className="mt-2 flex flex-wrap gap-2">
               <button
                 type="button"
                 className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"

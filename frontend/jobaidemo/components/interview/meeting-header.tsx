@@ -57,7 +57,7 @@ export function MeetingHeader({
   return (
     <header className="flex w-full min-w-0 flex-col items-center gap-8 md:gap-10">
       <div className="flex w-full justify-center pt-1">
-        <h1 className="text-center text-5xl font-black tracking-tight text-[#0f1114] sm:text-6xl">
+        <h1 className="text-center text-4xl font-black tracking-tight text-[#0f1114] sm:text-5xl md:text-6xl">
           JOB <span className="rounded-xl bg-sky-500 px-3 py-1 text-white">AI</span>
         </h1>
       </div>
@@ -127,14 +127,14 @@ export function MeetingHeader({
             <p>JobAI ID: {jobAiId ?? "—"}</p>
             <p>Nullxes ID: {meetingId ?? missingRuntimeIdLabel}</p>
             <p>Дата проведения: {meetingAt ? new Date(meetingAt).toLocaleString("ru-RU") : "—"}</p>
-            <p className="sm:col-span-2">Session ID: {sessionId ?? missingRuntimeIdLabel}</p>
+            <p className="break-all sm:col-span-2">Session ID: {sessionId ?? missingRuntimeIdLabel}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2 border-t border-slate-300/40 pt-4">
             <Badge className="shrink-0 bg-[#8aa0bb] text-white">{statusLabel}</Badge>
             <Button
               onClick={onStart}
               disabled={startDisabled}
-              className="h-9 shrink-0 rounded-lg bg-[#3a8edb] px-4 text-xs text-white hover:bg-[#2f7bc0]"
+              className="h-9 w-full shrink-0 rounded-lg bg-[#3a8edb] px-4 text-xs text-white hover:bg-[#2f7bc0] sm:w-auto"
             >
               Start Session
             </Button>
@@ -142,7 +142,7 @@ export function MeetingHeader({
               onClick={onStop}
               disabled={stopDisabled}
               variant="destructive"
-              className="h-9 shrink-0 rounded-lg px-4 text-xs"
+              className="h-9 w-full shrink-0 rounded-lg px-4 text-xs sm:w-auto"
             >
               Stop Interview
             </Button>
@@ -150,7 +150,7 @@ export function MeetingHeader({
               onClick={onFail}
               disabled={failDisabled}
               variant="secondary"
-              className="h-9 shrink-0 rounded-lg px-4 text-xs"
+              className="h-9 w-full shrink-0 rounded-lg px-4 text-xs sm:w-auto"
             >
               Fail Interview
             </Button>
