@@ -58,6 +58,7 @@ const AVATAR_READY_EVENT_TYPES = [
   "avatar.stream.joined"
 ];
 const HARD_CONTEXT_GUARD_ENABLED = process.env.NEXT_PUBLIC_INTERVIEW_HARD_GUARD === "1";
+const AGENT_SELF_INTRO = "Я HR-ассистент и готов провести с вами собеседование.";
 
 function isIgnorableStatusTransitionError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -115,6 +116,7 @@ function buildInterviewInstructions(context?: InterviewStartContext): string {
 
   return [
     "Ты HR-аватар для технического интервью.",
+    `В начале общения говори о себе так: "${AGENT_SELF_INTRO}"`,
     "Никогда не представляйся именем кандидата и не говори о себе как о кандидате.",
     "Ты представитель интервьюера (HR-аватар), кандидат — это отдельный человек из контекста.",
     "Используй только контекст интервью ниже, не придумывай новые факты и не меняй компанию/должность/имя кандидата.",
@@ -137,10 +139,8 @@ function buildOpeningUtterance(context?: InterviewStartContext): string {
     "кандидат";
   const company = context?.companyName?.trim() || "компания не указана";
   const jobTitle = context?.jobTitle?.trim() || "должность не указана";
-  const greeting =
-    context?.greetingSpeech?.trim() ||
-    `Здравствуйте, ${candidateFullName}, это собеседование по вакансии ${jobTitle} в компанию ${company}.`;
-  return `${greeting} Вы готовы пройти интервью?`;
+  const greeting = context?.greetingSpeech?.trim() || `Это собеседование по вакансии ${jobTitle} в компанию ${company}.`;
+  return `${AGENT_SELF_INTRO} Здравствуйте, ${candidateFullName}. ${greeting} Вы готовы пройти интервью?`;
 }
 
 async function transitionJobAiToInMeeting(interviewId: number): Promise<void> {
@@ -208,6 +208,12 @@ export function useInterviewSession() {
       });
     }
     return rtcRef.current;
+  }, []);
+
+  const hydrateActiveSession = useCallback((next: { meetingId: string; sessionId: string }) => {
+    setMeetingId((current) => current ?? next.meetingId);
+    setSessionId((current) => current ?? next.sessionId);
+    setPhase((current) => (current === "idle" ? "connected" : current));
   }, []);
 
   const setObserverTalkIsolation = useCallback(
@@ -377,7 +383,7 @@ export function useInterviewSession() {
           content: [
             {
               type: "input_text",
-              text: `Старт интервью. Произнеси в начале дословно: "${openingUtterance}". Представляйся только как HR-аватар, не как кандидат. Затем дождись ответа кандидата.`
+              text: `Старт интервью. Произнеси в начале дословно: "${openingUtterance}". Представляйся только как HR-ассистент, не как кандидат. Затем дождись ответа кандидата.`
             }
           ]
         }
@@ -386,7 +392,7 @@ export function useInterviewSession() {
         type: "response.create",
         response: {
           modalities: ["audio", "text"],
-          instructions: `Сейчас начни интервью и скажи дословно: "${openingUtterance}". Ты HR-аватар и не должен называть себя именем кандидата. Не упоминай другие вакансии, компании или роли.`
+          instructions: `Сейчас начни интервью и скажи дословно: "${openingUtterance}". Ты HR-ассистент и не должен называть себя именем кандидата. Не упоминай другие вакансии, компании или роли.`
         }
       });
 
@@ -422,12 +428,14 @@ export function useInterviewSession() {
     try {
       const activeMeetingId = meetingId;
       const activeSessionId = sessionId;
-      const rtc = ensureClient();
-      await rtc.postEvent({
-        type: "session.update",
-        source: "frontend",
-        message: "session_stopping"
-      });
+      const rtc = rtcRef.current;
+      if (rtc?.getSessionId()) {
+        await rtc.postEvent({
+          type: "session.update",
+          source: "frontend",
+          message: "session_stopping"
+        });
+      }
 
       await stopMeeting(activeMeetingId, {
         reason: "manual_stop",
@@ -451,7 +459,7 @@ export function useInterviewSession() {
           }
         }
       }
-      rtc.close();
+      rtc?.close();
       if (activeSessionId) {
         await closeRealtimeSession(activeSessionId).catch(() => undefined);
       }
@@ -464,7 +472,7 @@ export function useInterviewSession() {
       setPhase("failed");
       setError(err instanceof Error ? err.message : "Failed to stop session");
     }
-  }, [ensureClient, meetingId, sessionId]);
+  }, [meetingId, sessionId]);
 
   const markFailed = useCallback(async () => {
     if (!meetingId) {
@@ -499,6 +507,7 @@ export function useInterviewSession() {
     start,
     stop,
     markFailed,
-    setObserverTalkIsolation
+    setObserverTalkIsolation,
+    hydrateActiveSession
   };
 }

@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import type { StreamVideoClient } from "@stream-io/video-react-sdk";
 import { useInterviewSession, type InterviewStartContext } from "@/hooks/use-interview-session";
 import {
   getInterviewById,
@@ -70,7 +69,8 @@ export function InterviewShell() {
     phase,
     error,
     remoteAudioStream,
-    setObserverTalkIsolation
+    setObserverTalkIsolation,
+    hydrateActiveSession
   } =
     useInterviewSession();
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -82,22 +82,6 @@ export function InterviewShell() {
   const [rowsError, setRowsError] = useState<string | null>(null);
   const [rowsWarning, setRowsWarning] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
-  const [sharedStreamClient, setSharedStreamClient] = useState<StreamVideoClient | null>(null);
-  const [sharedStreamCall, setSharedStreamCall] = useState<ReturnType<StreamVideoClient["call"]> | null>(null);
-
-  const handleSharedCallChange = useCallback(
-    ({
-      client,
-      call
-    }: {
-      client: StreamVideoClient | null;
-      call: ReturnType<StreamVideoClient["call"]> | null;
-    }) => {
-      setSharedStreamClient(client);
-      setSharedStreamCall(call);
-    },
-    []
-  );
 
   useEffect(() => {
     if (!audioRef.current) {
@@ -130,6 +114,13 @@ export function InterviewShell() {
     }
     return selectedInterviewDetail.interview.id === selectedInterviewId ? selectedInterviewDetail : null;
   }, [selectedInterviewDetail, selectedInterviewId]);
+
+  const recoveredMeetingId =
+    meetingId ?? selectedRow?.nullxesMeetingId ?? selectedInterviewDetailMatched?.projection.nullxesMeetingId ?? null;
+  const recoveredSessionId =
+    sessionId ?? selectedRow?.sessionId ?? selectedInterviewDetailMatched?.projection.sessionId ?? null;
+  const recoveredRuntimeActive =
+    (selectedRow?.nullxesStatus ?? selectedInterviewDetailMatched?.projection.nullxesStatus) === "in_meeting";
 
   const candidateFio = useMemo(() => {
     const sourceFullName = selectedInterviewDetailMatched?.prototypeCandidate?.sourceFullName?.trim();
@@ -318,13 +309,20 @@ export function InterviewShell() {
     void setObserverTalkIsolation(false);
   }, [phase, setObserverTalkIsolation]);
 
+  useEffect(() => {
+    if (!recoveredRuntimeActive || meetingId || sessionId || !recoveredMeetingId || !recoveredSessionId) {
+      return;
+    }
+    hydrateActiveSession({ meetingId: recoveredMeetingId, sessionId: recoveredSessionId });
+  }, [hydrateActiveSession, meetingId, recoveredMeetingId, recoveredRuntimeActive, recoveredSessionId, sessionId]);
+
   return (
     <div className="min-h-screen w-full bg-[#dfe4ec] px-4 py-6 sm:px-6 sm:py-8 md:px-10">
       <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-10">
         <MeetingHeader
           statusLabel={statusLabel}
-          meetingId={meetingId ?? selectedRow?.nullxesMeetingId ?? selectedInterviewDetail?.projection.nullxesMeetingId ?? null}
-          sessionId={sessionId ?? selectedRow?.sessionId ?? selectedInterviewDetail?.projection.sessionId ?? null}
+          meetingId={recoveredMeetingId}
+          sessionId={recoveredSessionId}
           jobAiId={selectedRow?.jobAiId}
           companyName={selectedRow?.companyName}
           meetingAt={selectedRow?.meetingAt}
@@ -391,7 +389,7 @@ export function InterviewShell() {
           }
           stopDisabled={phase === "idle" || busy}
           failDisabled={phase === "idle" || busy}
-          showDebugActions={SHOW_INTERNAL_DEBUG_UI}
+          showDebugActions
         />
 
         {error ? (
@@ -435,23 +433,21 @@ export function InterviewShell() {
 
         <main className="mt-4 grid grid-cols-1 gap-8 lg:grid-cols-3 lg:items-stretch">
           <CandidateStreamCard
-            meetingId={meetingId}
-            sessionId={sessionId}
+            meetingId={recoveredMeetingId}
+            sessionId={recoveredSessionId}
             participantName={candidateFio.trim() || "Кандидат"}
             interviewId={selectedRow?.jobAiId}
             meetingAt={selectedRow?.meetingAt}
             interviewContext={interviewStartContext}
             onEnsureInterviewStart={start}
-            onSharedCallChange={handleSharedCallChange}
-            showControls={SHOW_INTERNAL_DEBUG_UI}
+            showControls
           />
           <AvatarStreamCard
-            participantName="HR Avatar"
+            participantName="HR ассистент"
             enabled={phase === "connected"}
             avatarReady={avatarReady}
-            sharedClient={sharedStreamClient}
-            sharedCall={sharedStreamCall}
-            showControls={SHOW_INTERNAL_DEBUG_UI}
+            meetingId={recoveredMeetingId}
+            showControls
           />
           <ParticipantCard roleLabel="Наблюдатель" participantName="Временно на паузе" placeholder showControls={false} />
         </main>

@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Copy } from "lucide-react";
+import { ChevronDown, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 
 type MeetingHeaderProps = {
@@ -44,6 +45,7 @@ export function MeetingHeader({
   showDebugActions = false
 }: MeetingHeaderProps) {
   const [entryUrlInput, setEntryUrlInput] = useState(prototypeEntryUrl ?? "");
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const missingRuntimeIdLabel = jobAiId ? "будет после Start Session" : "—";
 
   useEffect(() => {
@@ -101,21 +103,20 @@ export function MeetingHeader({
       <Card className="w-full max-w-xl min-w-0 rounded-2xl border-0 bg-[#d9dee7] shadow-[-8px_-8px_16px_rgba(255,255,255,.9),8px_8px_18px_rgba(163,177,198,.55)]">
         <CardHeader className="space-y-1 pb-3">
           <CardTitle className="text-base font-semibold text-slate-600">Видеособеседование</CardTitle>
-          <p className="text-xs font-normal leading-relaxed text-slate-500">
-            Имя и фамилия кандидата подставляются автоматически из данных собеседования.
-          </p>
         </CardHeader>
-        <CardContent className="space-y-5 text-sm text-slate-600">
-          <p>
-            Кандидат: <span className="font-medium text-slate-700">{candidateFio || "—"}</span>
-          </p>
-          <div className="grid grid-cols-1 gap-x-10 gap-y-2 text-slate-500 sm:grid-cols-2">
-            <p>Компания: {companyName ?? "—"}</p>
-            <p>JobAI ID: {jobAiId ?? "—"}</p>
-            <p>NULLXES ID: {meetingId ?? missingRuntimeIdLabel}</p>
-            <p>Дата проведения: {meetingAt ? new Date(meetingAt).toLocaleString("ru-RU") : "—"}</p>
-            <p className="break-all sm:col-span-2">Session ID: {sessionId ?? missingRuntimeIdLabel}</p>
+        <CardContent className="space-y-4 text-sm text-slate-600">
+          <div className="grid grid-cols-1 gap-2 text-slate-500 sm:grid-cols-2">
+            <p>
+              Кандидат: <span className="font-medium text-slate-700">{candidateFio || "—"}</span>
+            </p>
+            <p>
+              Компания: <span className="font-medium text-slate-700">{companyName ?? "—"}</span>
+            </p>
+            <p>
+              JobAI ID: <span className="font-medium text-slate-700">{jobAiId ?? "—"}</span>
+            </p>
           </div>
+
           <div className="flex flex-wrap items-center gap-2 border-t border-slate-300/40 pt-4">
             <Badge className="shrink-0 bg-[#8aa0bb] text-white">{statusLabel}</Badge>
             <Button
@@ -125,16 +126,18 @@ export function MeetingHeader({
             >
               Начать собеседование
             </Button>
-            {showDebugActions ? (
+            {onStop ? (
+              <Button
+                onClick={onStop}
+                disabled={stopDisabled}
+                variant="destructive"
+                className="h-9 w-full shrink-0 rounded-lg px-4 text-xs sm:w-auto"
+              >
+                Стоп сессия
+              </Button>
+            ) : null}
+            {showDebugActions && onFail ? (
               <>
-                <Button
-                  onClick={onStop}
-                  disabled={stopDisabled}
-                  variant="destructive"
-                  className="h-9 w-full shrink-0 rounded-lg px-4 text-xs sm:w-auto"
-                >
-                  Stop Interview
-                </Button>
                 <Button
                   onClick={onFail}
                   disabled={failDisabled}
@@ -146,6 +149,22 @@ export function MeetingHeader({
               </>
             ) : null}
           </div>
+
+          <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
+            <CollapsibleTrigger
+              className="inline-flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-xs font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground sm:w-auto"
+            >
+                Подробнее о сессии
+                <ChevronDown className={`size-4 transition-transform ${detailsOpen ? "rotate-180" : ""}`} />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-3">
+              <div className="grid grid-cols-1 gap-x-10 gap-y-2 text-slate-500 sm:grid-cols-2">
+                <p>NULLXES ID: {meetingId ?? missingRuntimeIdLabel}</p>
+                <p>Дата проведения: {meetingAt ? new Date(meetingAt).toLocaleString("ru-RU") : "—"}</p>
+                <p className="break-all sm:col-span-2">Session ID: {sessionId ?? missingRuntimeIdLabel}</p>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
         </CardContent>
       </Card>
     </header>

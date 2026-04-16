@@ -54,10 +54,6 @@ type CandidateStreamCardProps = {
     interviewContext?: InterviewStartContext;
   }) => Promise<InterviewStartResult>;
   interviewContext?: InterviewStartContext;
-  onSharedCallChange?: (state: {
-    client: StreamVideoClient | null;
-    call: ReturnType<StreamVideoClient["call"]> | null;
-  }) => void;
   showControls?: boolean;
 };
 
@@ -69,7 +65,6 @@ export function CandidateStreamCard({
   meetingAt,
   onEnsureInterviewStart,
   interviewContext,
-  onSharedCallChange,
   showControls = true
 }: CandidateStreamCardProps) {
   const [client, setClient] = useState<StreamVideoClient | null>(null);
@@ -85,9 +80,19 @@ export function CandidateStreamCard({
 
   const callRoomId = useMemo(() => meetingId ?? "demo-call", [meetingId]);
 
-  useEffect(() => {
-    onSharedCallChange?.({ client, call });
-  }, [call, client, onSharedCallChange]);
+  const disconnectStream = useCallback(async () => {
+    if (call) {
+      await call.leave().catch(() => undefined);
+    }
+    if (client) {
+      await client.disconnectUser().catch(() => undefined);
+    }
+    setCall(null);
+    setClient(null);
+    setMicEnabled(true);
+    setCameraEnabled(false);
+    setShowDevices(false);
+  }, [call, client]);
 
   const startStream = useCallback(async () => {
     setBusy(true);
@@ -164,20 +169,18 @@ export function CandidateStreamCard({
     void startStream();
   }, [busy, call, meetingId, sessionId, startStream]);
 
+  useEffect(() => {
+    if (meetingId || sessionId) {
+      return;
+    }
+    void disconnectStream();
+  }, [disconnectStream, meetingId, sessionId]);
+
   const leaveStream = async () => {
     setBusy(true);
     setError(null);
     try {
-      if (call) {
-        await call.leave();
-      }
-      if (client) {
-        await client.disconnectUser();
-      }
-      setCall(null);
-      setClient(null);
-      setMicEnabled(true);
-      setCameraEnabled(false);
+      await disconnectStream();
 
       if (sessionId) {
         await sendRealtimeEvent(sessionId, {
@@ -248,15 +251,15 @@ export function CandidateStreamCard({
       videoRef={streamViewportRef}
       footer={
         <>
-          <div className="flex items-center justify-between gap-2 text-slate-600">
-            <p className="min-h-5 truncate text-sm leading-snug">{participantName}</p>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-slate-600">
+            <p className="min-h-5 min-w-0 flex-1 truncate text-sm leading-snug">{participantName}</p>
             {showControls ? (
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="flex shrink-0 flex-wrap items-center gap-1.5">
                 <Button
                   type="button"
                   size="icon"
                   variant={micEnabled ? "secondary" : "destructive"}
-                  className="size-7"
+                  className="size-8 rounded-full"
                   onClick={toggleMicrophone}
                   disabled={!call || busy}
                   aria-label="Toggle microphone"
@@ -267,7 +270,7 @@ export function CandidateStreamCard({
                   type="button"
                   size="icon"
                   variant={cameraEnabled ? "secondary" : "destructive"}
-                  className="size-7"
+                  className="size-8 rounded-full"
                   onClick={toggleCamera}
                   disabled={!call || busy}
                   aria-label="Toggle camera"
@@ -278,7 +281,7 @@ export function CandidateStreamCard({
                   type="button"
                   size="icon"
                   variant="secondary"
-                  className="size-7"
+                  className="size-8 rounded-full"
                   onClick={toggleFullscreen}
                   aria-label="Toggle fullscreen"
                 >
@@ -291,16 +294,16 @@ export function CandidateStreamCard({
           {showControls ? (
             <div className="flex flex-wrap gap-2">
               {!call ? (
-                <Button size="sm" onClick={startStream} disabled={busy}>
-                  Join Stream
+                <Button size="sm" className="rounded-full px-3" onClick={startStream} disabled={busy}>
+                  Подключиться
                 </Button>
               ) : (
                 <>
-                  <Button size="sm" variant="secondary" onClick={() => setShowDevices((v) => !v)}>
-                    Devices
+                  <Button size="sm" variant="secondary" className="rounded-full px-3" onClick={() => setShowDevices((v) => !v)}>
+                    Устройства
                   </Button>
-                  <Button size="sm" variant="destructive" onClick={leaveStream} disabled={busy}>
-                    Leave
+                  <Button size="sm" variant="destructive" className="rounded-full px-3" onClick={leaveStream} disabled={busy}>
+                    Выйти
                   </Button>
                 </>
               )}
@@ -328,7 +331,7 @@ export function CandidateStreamCard({
         </div>
       ) : (
         <div className="flex h-full items-center justify-center text-sm text-slate-400">
-          {showControls ? "Нажмите \"Join Stream\" для входа" : "Ожидание старта собеседования"}
+          {showControls ? "Нажмите «Подключиться» для входа" : "Ожидание старта собеседования"}
         </div>
       )}
     </StreamParticipantShell>

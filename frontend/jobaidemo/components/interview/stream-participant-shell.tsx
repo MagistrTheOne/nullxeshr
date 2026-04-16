@@ -4,9 +4,9 @@ import { cn } from "@/lib/utils";
 
 /** Единая сетка трёх колонок: одинаковая высота «квадрата» видео и подвала под контролы. */
 export const STREAM_VIDEO_BOX_CLASS =
-  "h-[220px] min-h-[220px] w-full shrink-0 overflow-hidden rounded-xl border border-white/50 bg-[#d0d6e0] sm:h-[280px] sm:min-h-[280px]";
+  "stream-card-viewport relative h-[230px] min-h-[230px] w-full shrink-0 overflow-hidden rounded-xl border border-white/50 bg-[#d0d6e0] sm:h-[290px] sm:min-h-[290px]";
 
-export const STREAM_CARD_FOOTER_CLASS = "flex min-h-[132px] w-full shrink-0 flex-col justify-end gap-2 sm:min-h-[176px]";
+export const STREAM_CARD_FOOTER_CLASS = "flex min-h-[116px] w-full shrink-0 flex-col justify-end gap-2 sm:min-h-[152px]";
 
 type StreamParticipantShellProps = {
   title: string;
@@ -27,7 +27,7 @@ export function StreamParticipantShell({
 }: StreamParticipantShellProps) {
   return (
     <section className="flex h-full min-h-0 w-full flex-col items-center gap-3">
-      <h3 className="h-9 shrink-0 text-center text-2xl font-medium leading-none text-slate-600 sm:text-[30px]">{title}</h3>
+      <h3 className="h-9 shrink-0 text-center text-xl font-medium leading-none text-slate-600 sm:text-[30px]">{title}</h3>
       <Card className="flex w-full min-h-0 flex-1 flex-col rounded-2xl border-0 bg-[#d9dee7] p-3 shadow-[-8px_-8px_16px_rgba(255,255,255,.9),8px_8px_18px_rgba(163,177,198,.55)]">
         <CardContent className="flex min-h-0 flex-1 flex-col gap-3 p-2">
           <div ref={videoRef} className={cn(STREAM_VIDEO_BOX_CLASS, videoClassName)}>
