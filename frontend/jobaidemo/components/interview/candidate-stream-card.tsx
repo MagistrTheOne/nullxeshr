@@ -58,6 +58,7 @@ type CandidateStreamCardProps = {
     client: StreamVideoClient | null;
     call: ReturnType<StreamVideoClient["call"]> | null;
   }) => void;
+  showControls?: boolean;
 };
 
 export function CandidateStreamCard({
@@ -68,7 +69,8 @@ export function CandidateStreamCard({
   meetingAt,
   onEnsureInterviewStart,
   interviewContext,
-  onSharedCallChange
+  onSharedCallChange,
+  showControls = true
 }: CandidateStreamCardProps) {
   const [client, setClient] = useState<StreamVideoClient | null>(null);
   const [call, setCall] = useState<ReturnType<StreamVideoClient["call"]> | null>(null);
@@ -248,60 +250,64 @@ export function CandidateStreamCard({
         <>
           <div className="flex items-center justify-between gap-2 text-slate-600">
             <p className="min-h-5 truncate text-sm leading-snug">{participantName}</p>
-            <div className="flex shrink-0 items-center gap-2">
-              <Button
-                type="button"
-                size="icon"
-                variant={micEnabled ? "secondary" : "destructive"}
-                className="size-7"
-                onClick={toggleMicrophone}
-                disabled={!call || busy}
-                aria-label="Toggle microphone"
-              >
-                <Mic size={14} />
-              </Button>
-              <Button
-                type="button"
-                size="icon"
-                variant={cameraEnabled ? "secondary" : "destructive"}
-                className="size-7"
-                onClick={toggleCamera}
-                disabled={!call || busy}
-                aria-label="Toggle camera"
-              >
-                <Video size={14} />
-              </Button>
-              <Button
-                type="button"
-                size="icon"
-                variant="secondary"
-                className="size-7"
-                onClick={toggleFullscreen}
-                aria-label="Toggle fullscreen"
-              >
-                {isFullscreen ? <Minimize size={14} /> : <Maximize size={14} />}
-              </Button>
+            {showControls ? (
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  type="button"
+                  size="icon"
+                  variant={micEnabled ? "secondary" : "destructive"}
+                  className="size-7"
+                  onClick={toggleMicrophone}
+                  disabled={!call || busy}
+                  aria-label="Toggle microphone"
+                >
+                  <Mic size={14} />
+                </Button>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant={cameraEnabled ? "secondary" : "destructive"}
+                  className="size-7"
+                  onClick={toggleCamera}
+                  disabled={!call || busy}
+                  aria-label="Toggle camera"
+                >
+                  <Video size={14} />
+                </Button>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="secondary"
+                  className="size-7"
+                  onClick={toggleFullscreen}
+                  aria-label="Toggle fullscreen"
+                >
+                  {isFullscreen ? <Minimize size={14} /> : <Maximize size={14} />}
+                </Button>
+              </div>
+            ) : null}
+          </div>
+
+          {showControls ? (
+            <div className="flex flex-wrap gap-2">
+              {!call ? (
+                <Button size="sm" onClick={startStream} disabled={busy}>
+                  Join Stream
+                </Button>
+              ) : (
+                <>
+                  <Button size="sm" variant="secondary" onClick={() => setShowDevices((v) => !v)}>
+                    Devices
+                  </Button>
+                  <Button size="sm" variant="destructive" onClick={leaveStream} disabled={busy}>
+                    Leave
+                  </Button>
+                </>
+              )}
             </div>
-          </div>
+          ) : null}
 
-          <div className="flex flex-wrap gap-2">
-            {!call ? (
-              <Button size="sm" onClick={startStream} disabled={busy}>
-                Join Stream
-              </Button>
-            ) : (
-              <>
-                <Button size="sm" variant="secondary" onClick={() => setShowDevices((v) => !v)}>
-                  Devices
-                </Button>
-                <Button size="sm" variant="destructive" onClick={leaveStream} disabled={busy}>
-                  Leave
-                </Button>
-              </>
-            )}
-          </div>
-
-          {showDevices && call ? (
+          {showControls && showDevices && call ? (
             <div className="max-h-[100px] overflow-y-auto rounded-lg border border-white/60 bg-white/60 p-2">
               <DeviceSettings />
             </div>
@@ -321,7 +327,9 @@ export function CandidateStreamCard({
           </StreamVideo>
         </div>
       ) : (
-        <div className="flex h-full items-center justify-center text-sm text-slate-400">Нажмите &quot;Join Stream&quot; для входа</div>
+        <div className="flex h-full items-center justify-center text-sm text-slate-400">
+          {showControls ? "Нажмите \"Join Stream\" для входа" : "Ожидание старта собеседования"}
+        </div>
       )}
     </StreamParticipantShell>
   );

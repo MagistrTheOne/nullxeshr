@@ -23,6 +23,7 @@ type AvatarStreamCardProps = {
   avatarReady: boolean;
   sharedClient: StreamVideoClient | null;
   sharedCall: ReturnType<StreamVideoClient["call"]> | null;
+  showControls?: boolean;
 };
 
 export function AvatarStreamCard({
@@ -30,7 +31,8 @@ export function AvatarStreamCard({
   enabled,
   avatarReady,
   sharedClient,
-  sharedCall
+  sharedCall,
+  showControls = true
 }: AvatarStreamCardProps) {
   const canRenderAvatarWindow = enabled && Boolean(sharedClient && sharedCall);
   const [showDevices, setShowDevices] = useState(false);
@@ -100,78 +102,78 @@ export function AvatarStreamCard({
         <>
           <div className="flex items-center justify-between gap-2 text-slate-600">
             <p className="min-h-5 truncate text-sm leading-snug">{participantName}</p>
-            <div className="flex shrink-0 items-center gap-2">
-              <Badge variant="secondary" className="shrink-0">
-                {canRenderAvatarWindow ? "Connected" : avatarReady ? "Ready" : "Idle"}
-              </Badge>
+            {showControls ? (
+              <div className="flex shrink-0 items-center gap-2">
+                <Badge variant="secondary" className="shrink-0">
+                  {canRenderAvatarWindow ? "Connected" : avatarReady ? "Ready" : "Idle"}
+                </Badge>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant={micEnabled ? "secondary" : "destructive"}
+                  className="size-7"
+                  onClick={toggleMicrophone}
+                  disabled={!canRenderAvatarWindow || !sharedCall || busy}
+                  aria-label="Toggle microphone"
+                >
+                  <Mic size={14} />
+                </Button>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant={cameraEnabled ? "secondary" : "destructive"}
+                  className="size-7"
+                  onClick={toggleCamera}
+                  disabled={!canRenderAvatarWindow || !sharedCall || busy}
+                  aria-label="Toggle camera"
+                >
+                  <Video size={14} />
+                </Button>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="secondary"
+                  className="size-7"
+                  onClick={() => {
+                    void toggleFullscreen();
+                  }}
+                  aria-label="Toggle fullscreen"
+                >
+                  {isFullscreen ? <Minimize size={14} /> : <Maximize size={14} />}
+                </Button>
+              </div>
+            ) : null}
+          </div>
+
+          {showControls ? (
+            <div className="flex flex-wrap gap-2">
               <Button
-                type="button"
-                size="icon"
-                variant={micEnabled ? "secondary" : "destructive"}
-                className="size-7"
-                onClick={toggleMicrophone}
-                disabled={!canRenderAvatarWindow || !sharedCall || busy}
-                aria-label="Toggle microphone"
-              >
-                <Mic size={14} />
-              </Button>
-              <Button
-                type="button"
-                size="icon"
-                variant={cameraEnabled ? "secondary" : "destructive"}
-                className="size-7"
-                onClick={toggleCamera}
-                disabled={!canRenderAvatarWindow || !sharedCall || busy}
-                aria-label="Toggle camera"
-              >
-                <Video size={14} />
-              </Button>
-              <Button
-                type="button"
-                size="icon"
+                size="sm"
                 variant="secondary"
-                className="size-7"
-                onClick={() => {
-                  void toggleFullscreen();
-                }}
-                aria-label="Toggle fullscreen"
+                onClick={() => setShowDevices((v) => !v)}
+                disabled={!canRenderAvatarWindow || !sharedCall}
               >
-                {isFullscreen ? <Minimize size={14} /> : <Maximize size={14} />}
+                Devices
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => {
+                  void leaveSharedCall();
+                }}
+                disabled={!canRenderAvatarWindow || !sharedCall || busy}
+              >
+                Leave
               </Button>
             </div>
-          </div>
+          ) : null}
 
-          <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => setShowDevices((v) => !v)}
-              disabled={!canRenderAvatarWindow || !sharedCall}
-            >
-              Devices
-            </Button>
-            <Button
-              size="sm"
-              variant="destructive"
-              onClick={() => {
-                void leaveSharedCall();
-              }}
-              disabled={!canRenderAvatarWindow || !sharedCall || busy}
-            >
-              Leave
-            </Button>
-          </div>
-
-          {showDevices && canRenderAvatarWindow && sharedCall ? (
+          {showControls && showDevices && canRenderAvatarWindow && sharedCall ? (
             <div className="max-h-[100px] overflow-y-auto rounded-lg border border-white/60 bg-white/60 p-2">
               <DeviceSettings />
             </div>
           ) : null}
 
-          <p className="text-xs leading-relaxed text-slate-400">
-            Тот же shared Stream call: отдельный join для HR не используется.{" "}
-            <code className="rounded bg-white/40 px-1">avatar_ready</code> используется как индикатор готовности пайплайна.
-          </p>
         </>
       }
     >
@@ -189,7 +191,7 @@ export function AvatarStreamCard({
         <div className="flex h-full items-center justify-center text-sm text-slate-400">
           {enabled
             ? "Ожидание Stream-call кандидата"
-            : "Нажмите Start Session для подключения HR-аватара"}
+            : "Нажмите «Начать собеседование» для подключения HR-аватара"}
         </div>
       )}
     </StreamParticipantShell>

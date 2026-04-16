@@ -49,6 +49,8 @@ export function InterviewsTablePreview({
   onRefresh,
   onSelect
 }: InterviewsTablePreviewProps) {
+  const showSpectatorActions = process.env.NEXT_PUBLIC_ENABLE_SPECTATOR === "1";
+  const showInternalDebugUi = process.env.NEXT_PUBLIC_INTERNAL_DEBUG_UI === "1";
   const [refOpen, setRefOpen] = useState(false);
   const [refBusy, setRefBusy] = useState(false);
   const [refDetail, setRefDetail] = useState<InterviewDetail | null>(null);
@@ -134,9 +136,11 @@ export function InterviewsTablePreview({
                       <Button size="sm" variant="secondary" onClick={() => onSelect?.(row)}>
                         Детали
                       </Button>
-                      <Button size="sm" variant="secondary" onClick={() => void openReference(row.jobAiId)} disabled={refBusy}>
-                        Справочно
-                      </Button>
+                      {showInternalDebugUi ? (
+                        <Button size="sm" variant="secondary" onClick={() => void openReference(row.jobAiId)} disabled={refBusy}>
+                          Справочно
+                        </Button>
+                      ) : null}
                       <Button
                         size="sm"
                         variant="secondary"
@@ -149,24 +153,33 @@ export function InterviewsTablePreview({
                       >
                         Ссылка кандидата
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => {
-                          if (typeof window === "undefined") {
-                            return;
-                          }
-                          copyText(`${window.location.origin}${row.spectatorEntryPath}`);
-                        }}
-                      >
-                        Ссылка наблюдателя
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => openPath(row.spectatorEntryPath)}>
-                        Вход наблюдателя
-                      </Button>
-                      <Button size="icon" variant="secondary" aria-label="Открыть наблюдателя" onClick={() => openPath(row.spectatorEntryPath)}>
-                        <ExternalLink className="size-4" />
-                      </Button>
+                      {showSpectatorActions ? (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              if (typeof window === "undefined") {
+                                return;
+                              }
+                              copyText(`${window.location.origin}${row.spectatorEntryPath}`);
+                            }}
+                          >
+                            Ссылка наблюдателя
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => openPath(row.spectatorEntryPath)}>
+                            Вход наблюдателя
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="secondary"
+                            aria-label="Открыть наблюдателя"
+                            onClick={() => openPath(row.spectatorEntryPath)}
+                          >
+                            <ExternalLink className="size-4" />
+                          </Button>
+                        </>
+                      ) : null}
                     </div>
                   </TableCell>
                 </TableRow>

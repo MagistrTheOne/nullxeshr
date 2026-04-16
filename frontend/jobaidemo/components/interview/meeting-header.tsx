@@ -16,14 +16,13 @@ type MeetingHeaderProps = {
   prototypeEntryUrl?: string;
   onEntryUrlCommit?: (value: string) => void;
   candidateFio: string;
-  onCandidateFioChange: (value: string) => void;
-  onCandidateFioBlur?: () => void;
   onStart: () => void;
   onStop?: () => void;
   onFail?: () => void;
   startDisabled?: boolean;
   stopDisabled?: boolean;
   failDisabled?: boolean;
+  showDebugActions?: boolean;
 };
 
 export function MeetingHeader({
@@ -36,14 +35,13 @@ export function MeetingHeader({
   prototypeEntryUrl,
   onEntryUrlCommit,
   candidateFio,
-  onCandidateFioChange,
-  onCandidateFioBlur,
   onStart,
   onStop,
   onFail,
   startDisabled = false,
   stopDisabled = true,
-  failDisabled = true
+  failDisabled = true,
+  showDebugActions = false
 }: MeetingHeaderProps) {
   const [entryUrlInput, setEntryUrlInput] = useState(prototypeEntryUrl ?? "");
   const missingRuntimeIdLabel = jobAiId ? "будет после Start Session" : "—";
@@ -104,28 +102,17 @@ export function MeetingHeader({
         <CardHeader className="space-y-1 pb-3">
           <CardTitle className="text-base font-semibold text-slate-600">Видеособеседование</CardTitle>
           <p className="text-xs font-normal leading-relaxed text-slate-500">
-            ФИО кандидата. Сохраняется в gateway как имя/фамилия в проекции; исходный объект интервью JobAI (webhook) не
-            изменяется.
+            Имя и фамилия кандидата подставляются автоматически из данных собеседования.
           </p>
         </CardHeader>
         <CardContent className="space-y-5 text-sm text-slate-600">
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-slate-500" htmlFor="candidate-fio">
-              Как представиться / ФИО
-            </label>
-            <Input
-              id="candidate-fio"
-              value={candidateFio}
-              onChange={(e) => onCandidateFioChange(e.target.value)}
-              onBlur={() => onCandidateFioBlur?.()}
-              placeholder="Например: Мезенцев Денис Петрович"
-              className="min-h-12 rounded-lg border border-slate-300/60 bg-white/90 py-3 text-base leading-normal text-slate-800 shadow-inner placeholder:text-slate-400"
-            />
-          </div>
+          <p>
+            Кандидат: <span className="font-medium text-slate-700">{candidateFio || "—"}</span>
+          </p>
           <div className="grid grid-cols-1 gap-x-10 gap-y-2 text-slate-500 sm:grid-cols-2">
             <p>Компания: {companyName ?? "—"}</p>
             <p>JobAI ID: {jobAiId ?? "—"}</p>
-            <p>Nullxes ID: {meetingId ?? missingRuntimeIdLabel}</p>
+            <p>NULLXES ID: {meetingId ?? missingRuntimeIdLabel}</p>
             <p>Дата проведения: {meetingAt ? new Date(meetingAt).toLocaleString("ru-RU") : "—"}</p>
             <p className="break-all sm:col-span-2">Session ID: {sessionId ?? missingRuntimeIdLabel}</p>
           </div>
@@ -136,24 +123,28 @@ export function MeetingHeader({
               disabled={startDisabled}
               className="h-9 w-full shrink-0 rounded-lg bg-[#3a8edb] px-4 text-xs text-white hover:bg-[#2f7bc0] sm:w-auto"
             >
-              Start Session
+              Начать собеседование
             </Button>
-            <Button
-              onClick={onStop}
-              disabled={stopDisabled}
-              variant="destructive"
-              className="h-9 w-full shrink-0 rounded-lg px-4 text-xs sm:w-auto"
-            >
-              Stop Interview
-            </Button>
-            <Button
-              onClick={onFail}
-              disabled={failDisabled}
-              variant="secondary"
-              className="h-9 w-full shrink-0 rounded-lg px-4 text-xs sm:w-auto"
-            >
-              Fail Interview
-            </Button>
+            {showDebugActions ? (
+              <>
+                <Button
+                  onClick={onStop}
+                  disabled={stopDisabled}
+                  variant="destructive"
+                  className="h-9 w-full shrink-0 rounded-lg px-4 text-xs sm:w-auto"
+                >
+                  Stop Interview
+                </Button>
+                <Button
+                  onClick={onFail}
+                  disabled={failDisabled}
+                  variant="secondary"
+                  className="h-9 w-full shrink-0 rounded-lg px-4 text-xs sm:w-auto"
+                >
+                  Fail Interview
+                </Button>
+              </>
+            ) : null}
           </div>
         </CardContent>
       </Card>
